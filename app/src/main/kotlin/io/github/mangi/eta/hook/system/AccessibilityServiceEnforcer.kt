@@ -17,6 +17,7 @@ import android.os.SystemClock
 import android.os.UserManager
 import android.provider.Settings
 import io.github.mangi.eta.agent.accessibility.AccessibilityProtectionProtocol
+import io.github.mangi.eta.core.ModuleConfig
 import io.github.mangi.eta.core.ModuleLogger
 import io.github.mangi.eta.core.safeLogType
 import java.util.concurrent.atomic.AtomicBoolean
@@ -821,7 +822,7 @@ internal class AccessibilityServiceEnforcer(
     }
 
     private companion object {
-        const val APP_PACKAGE = "io.github.mangi.eta"
+        const val APP_PACKAGE = ModuleConfig.ETA_PACKAGE
         const val SERVICE_CLASS =
             "io.github.mangi.eta.agent.accessibility.AgentAccessibilityService"
         const val DISABLED = 0

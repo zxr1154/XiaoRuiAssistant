@@ -46,6 +46,12 @@ jobs:
         run: chmod +x ./gradlew
       - name: Build Debug APK
         run: ./gradlew --no-daemon --stacktrace :app:assembleDebug
+      - name: Verify independent app routing
+        run: >-
+          ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest
+          --tests 'io.github.mangi.eta.agent.runtime.EntrySurfaceGuardTest'
+          --tests 'io.github.mangi.eta.core.ModuleConfigEntryPackagesTest'
+          --tests 'io.github.mangi.eta.hook.system.AccessibilityServiceEnforcerTest'
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
@@ -53,4 +59,3 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
-
