@@ -54,6 +54,7 @@ jobs:
           --tests 'io.github.mangi.eta.hook.system.AccessibilityServiceEnforcerTest'
           --tests 'io.github.mangi.eta.agent.roleplay.ConversationModePreferenceTest'
           --tests 'io.github.mangi.eta.ui.screens.home.AgentHomeModeUiTest'
+          --tests 'io.github.mangi.eta.agent.runtime.AgentRuntimeBindingTest'
       - name: Upload test reports and mode screenshots
         if: always()
         uses: actions/upload-artifact@v4

@@ -11,6 +11,7 @@ import android.os.ParcelFileDescriptor
 import io.github.mangi.eta.agent.model.AgentConversationCodec
 import io.github.mangi.eta.agent.model.AgentModelClient
 import io.github.mangi.eta.config.Prefs
+import io.github.mangi.eta.core.ModuleConfig
 import io.github.mangi.eta.data.model.CustomBody
 import io.github.mangi.eta.data.model.CustomHeader
 import io.github.mangi.eta.data.model.ModelReasoningCapabilities
@@ -84,7 +85,7 @@ internal object AgentRuntimeWire {
     /** service -> client：返回是否成功重新订阅指定 run。 */
     const val MSG_ATTACH_RUN_RESPONSE = 12
 
-    private const val MODULE_PACKAGE = "io.github.mangi.eta"
+    private const val MODULE_PACKAGE = ModuleConfig.ETA_PACKAGE
     private const val SERVICE_CLASS = "io.github.mangi.eta.agent.runtime.AgentRuntimeService"
 
     private const val KEY_TYPE = "type"
