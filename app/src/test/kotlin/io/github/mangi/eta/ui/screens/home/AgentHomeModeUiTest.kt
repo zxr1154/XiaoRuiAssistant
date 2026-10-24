@@ -41,7 +41,7 @@ import top.yukonga.miuix.kmp.theme.lightColorScheme
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class AgentHomeModeUiTest {
     @get:Rule val ui = createComposeRule()
-    private val context get() = RuntimeEnvironment.getApplication<Application>()
+    private val context get() = RuntimeEnvironment.getApplication()
     private val emptyState = AgentChatUiState(
         messages = emptyList(), input = "", isStreaming = false, thinkingEnabled = false,
     )

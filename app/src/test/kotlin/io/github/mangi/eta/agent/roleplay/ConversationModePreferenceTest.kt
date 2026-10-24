@@ -12,7 +12,7 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36], application = Application::class)
 class ConversationModePreferenceTest {
-    private val context get() = RuntimeEnvironment.getApplication<Application>()
+    private val context get() = RuntimeEnvironment.getApplication()
 
     @Before fun clearPreferences() {
         context.getSharedPreferences("eta_conversation_modes", 0).edit().clear().commit()
