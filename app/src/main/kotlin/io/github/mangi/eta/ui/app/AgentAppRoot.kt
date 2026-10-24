@@ -413,6 +413,7 @@ fun AgentAppRoot(
                                 AgentHomeAction.OpenSystemEnhance -> pushRoute(AppRoute.SystemEnhance)
                                 AgentHomeAction.OpenSettings -> pushRoute(AppRoute.Settings)
                                 AgentHomeAction.OpenBrowser -> pushRoute(AppRoute.Browser)
+                                AgentHomeAction.OpenCharacters -> pushRoute(AppRoute.Characters)
                                 AgentHomeAction.ExpandRunTrace -> Unit
                             }
                         },

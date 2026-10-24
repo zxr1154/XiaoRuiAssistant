@@ -109,8 +109,14 @@ internal class AgentRuntimeRunExecutor(
             val conversationId = uiPayload?.conversationId
                 ?.takeIf { it.isNotBlank() }
             memoryConversationId = conversationId
-            val roleplayContext = conversationId?.takeIf { id ->
-                ConversationModePreference.getMode(appContext, id) == ConversationModePreference.ROLEPLAY
+            val conversationMode = conversationId?.let { id ->
+                val hasCharacter = runBlocking {
+                    !EtaDatabase.get(appContext).conversationDao().roleplayJson(id).isNullOrBlank()
+                }
+                ConversationModePreference.getMode(appContext, id, hasCharacter)
+            } ?: ConversationModePreference.NORMAL
+            val roleplayContext = conversationId?.takeIf {
+                conversationMode == ConversationModePreference.ROLEPLAY
             }?.let { id ->
                 runBlocking { RoleplayRunContext.resolve(appContext, id, contextWindow, memoryEnabled) }
             }
@@ -260,8 +266,7 @@ internal class AgentRuntimeRunExecutor(
                 }
             }
             val completedResponse = AgentModelClient.complete(
-                config = if (conversationId != null &&
-                    ConversationModePreference.getMode(appContext, conversationId) == ConversationModePreference.FREEDOM
+                config = if (conversationMode == ConversationModePreference.FREEDOM
                 ) request.config.copy(systemPrompt = ConversationModePreference.FREEDOM_PROMPT)
                 else request.config,
                 sessionId = request.effectiveModelSessionId,

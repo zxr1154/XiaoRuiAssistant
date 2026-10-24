@@ -8,23 +8,37 @@ internal object ConversationModePreference {
     const val NORMAL = "normal"
     const val FREEDOM = "freedom"
     const val ROLEPLAY = "roleplay"
+    private const val DRAFT_MODE = "__draft_mode"
 
-    fun getMode(context: Context, conversationId: String, hasCharacter: Boolean = false): String {
+    fun getMode(context: Context, conversationId: String?, hasCharacter: Boolean = false): String {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val stored = prefs.getString(conversationId + "_mode", null)
+        val stored = prefs.getString(modeKey(conversationId), null)
         if (stored in listOf(NORMAL, FREEDOM, ROLEPLAY)) return stored!!
         // Preserve the previous patch's boolean preference.
-        if (prefs.contains(conversationId)) {
+        if (conversationId != null && prefs.contains(conversationId)) {
             return if (prefs.getBoolean(conversationId, false)) ROLEPLAY else NORMAL
         }
         return if (hasCharacter) ROLEPLAY else NORMAL
     }
 
-    fun setMode(context: Context, conversationId: String, mode: String) {
+    fun setMode(context: Context, conversationId: String?, mode: String) {
         require(mode in listOf(NORMAL, FREEDOM, ROLEPLAY))
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putString(conversationId + "_mode", mode).apply()
+            .edit().putString(modeKey(conversationId), mode).apply()
     }
+
+    /** Copy the visible draft selection before dispatching the first message. */
+    fun initializeConversation(context: Context, conversationId: String, hasCharacter: Boolean = false) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (prefs.contains(modeKey(conversationId)) || prefs.contains(conversationId)) return
+        val mode = if (hasCharacter) ROLEPLAY else getMode(context, null).let {
+            if (it == ROLEPLAY) NORMAL else it
+        }
+        setMode(context, conversationId, mode)
+    }
+
+    private fun modeKey(conversationId: String?): String =
+        conversationId?.let { it + "_mode" } ?: DRAFT_MODE
 
     fun isRoleplay(context: Context, conversationId: String): Boolean =
         getMode(context, conversationId) == ROLEPLAY

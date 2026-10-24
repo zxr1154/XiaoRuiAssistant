@@ -23,6 +23,7 @@ import io.github.mangi.eta.agent.model.AgentFileReferencePolicy
 import io.github.mangi.eta.agent.model.AgentFileReferencePromptCodec
 import io.github.mangi.eta.agent.model.AgentModelClient
 import io.github.mangi.eta.agent.roleplay.RoleplayBinding
+import io.github.mangi.eta.agent.roleplay.ConversationModePreference
 import io.github.mangi.eta.agent.roleplay.CharacterMacros
 import io.github.mangi.eta.agent.roleplay.CharacterCardCodec
 import io.github.mangi.eta.agent.roleplay.RoleplayMessageLink
@@ -963,6 +964,7 @@ internal class AgentAppState(
     fun startCharacterConversation(binding: RoleplayBinding, greeting: String) {
         createConversation()
         val id = newConversationId()
+        ConversationModePreference.initializeConversation(appContext, id, hasCharacter = true)
         val greetingId = "greeting-$id"
         val text = CharacterMacros.expand(
             text = greeting, card = CharacterCardCodec.decodeJson(binding.cardSnapshotJson),
@@ -1184,6 +1186,7 @@ internal class AgentAppState(
         }
 
         val conversationId = selectedConversationId ?: newConversationId().also {
+            ConversationModePreference.initializeConversation(appContext, it)
             selectedConversationId = it
         }
         dispatchMessageToConversation(
@@ -1201,6 +1204,7 @@ internal class AgentAppState(
         item: QueuedMessageUi,
     ) {
         val targetConversationId = conversationId ?: selectedConversationId ?: newConversationId().also {
+            ConversationModePreference.initializeConversation(appContext, it)
             selectedConversationId = it
         }
         val state = conversationsById[targetConversationId] ?: homeState

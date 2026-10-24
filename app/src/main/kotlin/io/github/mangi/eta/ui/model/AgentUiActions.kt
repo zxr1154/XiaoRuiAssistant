@@ -32,6 +32,7 @@ sealed interface AgentHomeAction {
     data object OpenSystemEnhance : AgentHomeAction
     data object OpenSettings : AgentHomeAction
     data object OpenBrowser : AgentHomeAction
+    data object OpenCharacters : AgentHomeAction
     data object ExpandRunTrace : AgentHomeAction
 }
 

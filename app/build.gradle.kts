@@ -39,8 +39,8 @@ android {
         minSdk = 33
         targetSdk = 37
         // versionCode 规则：yyyyMMdd + 两位当日序号（01 起），发版时随 versionName 一起手动递增。
-        versionCode = 2026102202
-        versionName = "3.3.3"
+        versionCode = 2026102401
+        versionName = "3.3.4"
 
         ndk {
             // 同时过滤本地与依赖 AAR 的原生库，确保 APK 仅包含 ARM64。
@@ -189,4 +189,6 @@ dependencies {
     testImplementation(libs.json)
     testImplementation(libs.room.testing)
     testImplementation(libs.robolectric)
+    testImplementation("androidx.compose.ui:ui-test-junit4:1.12.0")
+    debugImplementation("androidx.compose.ui:ui-test-manifest:1.12.0")
 }

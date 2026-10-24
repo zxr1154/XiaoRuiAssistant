@@ -1,12 +1,7 @@
 package io.github.mangi.eta.ui.screens.home
 
-import android.content.Context
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.layout.padding
-import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,7 +26,7 @@ import io.github.mangi.eta.ui.model.roleplayChatUi
  * AgentChatHome：首屏为聊天主舞台。
  *
  * 顶部入口统一由 [io.github.mangi.eta.ui.app.AgentAppShell] 提供，
- * 本 Screen 只负责消息流、Run trace、工具摘要和底部输入框。
+ * 本 Screen 提供常驻模式切换、消息流、Run trace、工具摘要和底部输入框。
  */
 @Composable
 internal fun AgentHomeScreen(
@@ -47,86 +42,83 @@ internal fun AgentHomeScreen(
 ) {
     // key 内保持完整分支，避免提前返回遗留无法转换为 DEX 的编译器标记。
     key(chatConversationCompositionKey(conversationKey)) {
-        if (!state.isConversationLoaded) {
-            AgentConversationLoadState(
-                isLoading = isLoadingConversation,
-                failed = conversationLoadFailed,
-                onRetry = { onAction(AgentHomeAction.RetryConversationLoad) },
-                modifier = modifier,
-            )
-        } else {
-            val androidContext = LocalContext.current
-            val character = state.roleplayChatUi()
-            var selectedMode by remember(conversationKey) {
-                mutableStateOf(conversationKey?.let {
-                    ConversationModePreference.getMode(androidContext, it, character != null)
-                } ?: ConversationModePreference.NORMAL)
-            }
-            Column {
-                if (conversationKey != null && !state.isStreaming) {
-                    Row {
-                        val choices = listOf(
-                            ConversationModePreference.NORMAL to "普通",
-                            ConversationModePreference.FREEDOM to "破甲",
-                        ) + if (character != null) listOf(ConversationModePreference.ROLEPLAY to "角色扮演") else emptyList()
-                        choices.forEach { (mode, title) ->
-                            androidx.compose.foundation.layout.Box(
-                                modifier = Modifier.clickable {
-                                    selectedMode = mode
-                                    ConversationModePreference.setMode(androidContext, conversationKey, mode)
-                                }.padding(12.dp)
-                            ) { BasicText(if (selectedMode == mode) "● $title" else "○ $title") }
-                        }
+        val androidContext = LocalContext.current
+        val character = state.roleplayChatUi()
+        var selectedMode by remember(conversationKey, character != null) {
+            mutableStateOf(ConversationModePreference.getMode(androidContext, conversationKey, character != null))
+        }
+        Column(modifier = modifier.fillMaxSize()) {
+            ConversationModeBar(
+                selectedMode = selectedMode,
+                enabled = state.isConversationLoaded && !state.isStreaming && !state.isCompacting,
+                hasCharacter = character != null,
+                onModeSelected = { mode ->
+                    if (mode == ConversationModePreference.ROLEPLAY && character == null) {
+                        onAction(AgentHomeAction.OpenCharacters)
+                    } else {
+                        selectedMode = mode
+                        ConversationModePreference.setMode(androidContext, conversationKey, mode)
                     }
-                }
-                CompositionLocalProvider(LocalRoleplayChat provides if (selectedMode == ConversationModePreference.ROLEPLAY) character else null) {
-                AgentChatBody(
-                    messages = state.messages,
-                    modelPickerState = modelPickerState,
-                    isCompacting = state.isCompacting,
-                    input = state.input,
-                    isStreaming = state.isStreaming,
-                    reasoningEffort = state.reasoningEffort,
-                    availableReasoningEfforts = state.availableReasoningEfforts,
-                    pendingImages = state.pendingImages,
-                    pendingFileReferences = state.pendingFileReferences,
-                    queuedMessages = state.queuedMessages,
-                    inputSyncVersion = state.inputSyncVersion,
-                    messageEdit = state.messageEdit,
-                    onReasoningEffortChange = { onAction(AgentHomeAction.ReasoningEffortChanged(it)) },
-                    onCompactContext = { onAction(AgentHomeAction.CompactContext) },
-                    canCompactContext = state.canCompactContext,
-                    onModelSelected = { onAction(AgentHomeAction.ModelSelected(it)) },
-                    onSubmit = { text -> onAction(AgentHomeAction.SubmitMessage(text)) },
-                    onInterruptAndSubmit = { text -> onAction(AgentHomeAction.InterruptAndSubmitMessage(text)) },
-                    onSteerQueuedMessage = { id -> onAction(AgentHomeAction.SteerQueuedMessage(id)) },
-                    onRecallQueuedMessage = { id, draft -> onAction(AgentHomeAction.RecallQueuedMessage(id, draft)) },
-                    onRemoveQueuedMessage = { id -> onAction(AgentHomeAction.RemoveQueuedMessage(id)) },
-                    onStop = { onAction(AgentHomeAction.StopRun) },
-                    onAttachImage = { uri -> onAction(AgentHomeAction.ImageAttached(uri)) },
-                    onRemoveImage = { id -> onAction(AgentHomeAction.RemoveImage(id)) },
-                    onAttachFiles = { uris -> onAction(AgentHomeAction.FilesAttached(uris)) },
-                    onAttachFolder = { uri -> onAction(AgentHomeAction.FolderAttached(uri)) },
-                    onAttachFilePath = { path -> onAction(AgentHomeAction.FilePathAttached(path)) },
-                    onRemoveFileReference = { id -> onAction(AgentHomeAction.RemoveFileReference(id)) },
-                    onEditMessage = { id -> onAction(AgentHomeAction.EditMessage(id)) },
-                    onCancelMessageEdit = { onAction(AgentHomeAction.CancelMessageEdit) },
-                    onDeleteMessage = { id -> onAction(AgentHomeAction.DeleteMessage(id)) },
-                    onRegenerateMessage = { id -> onAction(AgentHomeAction.RegenerateMessage(id)) },
-                    onSelectReplyCandidate = { id, index -> onAction(AgentHomeAction.SelectReplyCandidate(id, index)) },
-                    onSuggestionClick = { prompt ->
-                        onAction(AgentHomeAction.SubmitMessage(prompt))
-                    },
-                    onRunTraceClick = { onAction(AgentHomeAction.ExpandRunTrace) },
-                    onOpenBrowser = { onAction(AgentHomeAction.OpenBrowser) },
-                    hasEarlierMessages = state.hasEarlierMessages,
-                    messageStartIndex = state.messageStartIndex,
-                    historyLoadState = historyLoadState,
-                    onLoadEarlierMessages = { onAction(AgentHomeAction.LoadEarlierMessages) },
-                    onHistoryViewportChanged = { onAction(AgentHomeAction.HistoryViewportChanged(it)) },
-                    isDrawerOpen = isDrawerOpen,
-                    modifier = modifier,
+                },
+            )
+            if (!state.isConversationLoaded) {
+                AgentConversationLoadState(
+                    isLoading = isLoadingConversation,
+                    failed = conversationLoadFailed,
+                    onRetry = { onAction(AgentHomeAction.RetryConversationLoad) },
+                    modifier = Modifier.weight(1f),
                 )
+            } else {
+                CompositionLocalProvider(
+                    LocalRoleplayChat provides if (selectedMode == ConversationModePreference.ROLEPLAY) character else null,
+                ) {
+                    AgentChatBody(
+                        messages = state.messages,
+                        modelPickerState = modelPickerState,
+                        isCompacting = state.isCompacting,
+                        input = state.input,
+                        isStreaming = state.isStreaming,
+                        reasoningEffort = state.reasoningEffort,
+                        availableReasoningEfforts = state.availableReasoningEfforts,
+                        pendingImages = state.pendingImages,
+                        pendingFileReferences = state.pendingFileReferences,
+                        queuedMessages = state.queuedMessages,
+                        inputSyncVersion = state.inputSyncVersion,
+                        messageEdit = state.messageEdit,
+                        onReasoningEffortChange = { onAction(AgentHomeAction.ReasoningEffortChanged(it)) },
+                        onCompactContext = { onAction(AgentHomeAction.CompactContext) },
+                        canCompactContext = state.canCompactContext,
+                        onModelSelected = { onAction(AgentHomeAction.ModelSelected(it)) },
+                        onSubmit = { text -> onAction(AgentHomeAction.SubmitMessage(text)) },
+                        onInterruptAndSubmit = { text -> onAction(AgentHomeAction.InterruptAndSubmitMessage(text)) },
+                        onSteerQueuedMessage = { id -> onAction(AgentHomeAction.SteerQueuedMessage(id)) },
+                        onRecallQueuedMessage = { id, draft -> onAction(AgentHomeAction.RecallQueuedMessage(id, draft)) },
+                        onRemoveQueuedMessage = { id -> onAction(AgentHomeAction.RemoveQueuedMessage(id)) },
+                        onStop = { onAction(AgentHomeAction.StopRun) },
+                        onAttachImage = { uri -> onAction(AgentHomeAction.ImageAttached(uri)) },
+                        onRemoveImage = { id -> onAction(AgentHomeAction.RemoveImage(id)) },
+                        onAttachFiles = { uris -> onAction(AgentHomeAction.FilesAttached(uris)) },
+                        onAttachFolder = { uri -> onAction(AgentHomeAction.FolderAttached(uri)) },
+                        onAttachFilePath = { path -> onAction(AgentHomeAction.FilePathAttached(path)) },
+                        onRemoveFileReference = { id -> onAction(AgentHomeAction.RemoveFileReference(id)) },
+                        onEditMessage = { id -> onAction(AgentHomeAction.EditMessage(id)) },
+                        onCancelMessageEdit = { onAction(AgentHomeAction.CancelMessageEdit) },
+                        onDeleteMessage = { id -> onAction(AgentHomeAction.DeleteMessage(id)) },
+                        onRegenerateMessage = { id -> onAction(AgentHomeAction.RegenerateMessage(id)) },
+                        onSelectReplyCandidate = { id, index -> onAction(AgentHomeAction.SelectReplyCandidate(id, index)) },
+                        onSuggestionClick = { prompt ->
+                            onAction(AgentHomeAction.SubmitMessage(prompt))
+                        },
+                        onRunTraceClick = { onAction(AgentHomeAction.ExpandRunTrace) },
+                        onOpenBrowser = { onAction(AgentHomeAction.OpenBrowser) },
+                        hasEarlierMessages = state.hasEarlierMessages,
+                        messageStartIndex = state.messageStartIndex,
+                        historyLoadState = historyLoadState,
+                        onLoadEarlierMessages = { onAction(AgentHomeAction.LoadEarlierMessages) },
+                        onHistoryViewportChanged = { onAction(AgentHomeAction.HistoryViewportChanged(it)) },
+                        isDrawerOpen = isDrawerOpen,
+                        modifier = Modifier.weight(1f),
+                    )
                 }
             }
         }

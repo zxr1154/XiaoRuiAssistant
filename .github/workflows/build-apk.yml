@@ -46,12 +46,25 @@ jobs:
         run: chmod +x ./gradlew
       - name: Build Debug APK
         run: ./gradlew --no-daemon --stacktrace :app:assembleDebug
-      - name: Verify independent app routing
+      - name: Verify modes, home UI and independent app routing
         run: >-
           ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest
           --tests 'io.github.mangi.eta.agent.runtime.EntrySurfaceGuardTest'
           --tests 'io.github.mangi.eta.core.ModuleConfigEntryPackagesTest'
           --tests 'io.github.mangi.eta.hook.system.AccessibilityServiceEnforcerTest'
+          --tests 'io.github.mangi.eta.agent.roleplay.ConversationModePreferenceTest'
+          --tests 'io.github.mangi.eta.ui.screens.home.AgentHomeModeUiTest'
+      - name: Upload test reports and mode screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: XiaoRuiAssistant-mode-ui-verification
+          path: |
+            app/build/reports/tests/testDebugUnitTest/
+            app/build/test-results/testDebugUnitTest/
+            app/build/reports/mode-ui/
+          if-no-files-found: warn
+          retention-days: 30
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
