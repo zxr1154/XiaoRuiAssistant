@@ -151,6 +151,10 @@ internal class AgentAppState(
     var modelPickerState by mutableStateOf(AgentModelPickerUiState())
         private set
 
+    private var allConversationSummaries by mutableStateOf<List<ConversationSummaryUi>>(emptyList())
+    val roleplayConversations: List<ConversationSummaryUi>
+        get() = allConversationSummaries.filter { it.isRoleplayConversation }
+
     var conversationPaneState by mutableStateOf(
         ConversationPaneUiState(
             conversations = emptyList(),
@@ -2250,6 +2254,7 @@ internal class AgentAppState(
                     isActiveRun = state.isStreaming,
                 )
             }
+        allConversationSummaries = summaries
         val query = conversationPaneState.searchQuery.trim()
         conversationPaneState = conversationPaneState.copy(
             selectedConversationId = selectedConversationId,

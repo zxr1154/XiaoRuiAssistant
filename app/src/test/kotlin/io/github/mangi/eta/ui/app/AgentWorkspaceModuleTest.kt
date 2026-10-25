@@ -84,6 +84,13 @@ class AgentWorkspaceModuleTest {
         assertTrue(state.homeState.messages.isEmpty())
     }
 
+    @Test fun storyRecordsRemainCompleteWhileTheAssistantHistoryIsFiltered() {
+        val state = appState("assistant")
+        state.updateSearchQuery("助手")
+        assertEquals(listOf("assistant"), state.conversationPaneState.conversations.map { it.id })
+        assertEquals(listOf("story"), state.roleplayConversations.map { it.id })
+    }
+
     private fun appState(selected: String?): AgentAppState = AgentAppState(
         context, scope,
         AgentConversationStore.Snapshot(

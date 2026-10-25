@@ -23,6 +23,7 @@ import io.github.mangi.eta.ui.model.AgentHomeAction
 import io.github.mangi.eta.ui.model.AgentModelPickerUiState
 import io.github.mangi.eta.ui.model.ConversationModeUi
 import io.github.mangi.eta.ui.model.ConversationSummaryUi
+import io.github.mangi.eta.ui.navigation.AppRoute
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -106,6 +107,14 @@ class RoleplayModuleUiTest {
         ui.runOnIdle { assertEquals(1, returns) }
     }
 
+    @Test fun quickActionsOpenThePersonaAndCharacterEditors() {
+        val routes = mutableListOf<AppRoute>()
+        showLibrary(onNavigate = routes::add)
+        ui.onNodeWithTag("roleplay-persona").performClick()
+        ui.onNodeWithTag("roleplay-create").performClick()
+        ui.runOnIdle { assertEquals(listOf(AppRoute.CharacterPersona, AppRoute.CharacterEditor()), routes) }
+    }
+
     @Test fun roleplayChatUsesCharacterIdentityWithoutAssistantModeControls() {
         val actions = mutableListOf<AgentHomeAction>()
         ui.setContent {
@@ -126,12 +135,12 @@ class RoleplayModuleUiTest {
         screenshot("roleplay-chat")
     }
 
-    private fun showLibrary(dark: Boolean = false, onStory: (String) -> Unit = {}, onAssistant: () -> Unit = {}) {
+    private fun showLibrary(dark: Boolean = false, onStory: (String) -> Unit = {}, onAssistant: () -> Unit = {}, onNavigate: (AppRoute) -> Unit = {}) {
         val store = CharacterLibraryStore(RuntimeEnvironment.getApplication(), scope)
         ui.setContent {
             MiuixTheme(colors = if (dark) darkColorScheme() else lightColorScheme()) {
                 Box(Modifier.fillMaxSize().background(MiuixTheme.colorScheme.background)) {
-                    CharacterLibraryScreen(store, {}, onAssistant, listOf(story), onStory)
+                    CharacterLibraryScreen(store, onNavigate, onAssistant, listOf(story), onStory)
                 }
             }
         }

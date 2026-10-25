@@ -541,7 +541,7 @@ fun AgentAppRoot(
                     store = characterStore,
                     onNavigate = { if (navigator.current() == AppRoute.Characters) pushRoute(it) },
                     onBack = ::openAssistantModule,
-                    recentStories = agentState.conversationPaneState.forModule(AppModule.Roleplay).conversations,
+                    recentStories = agentState.roleplayConversations,
                     onOpenStory = ::selectConversation,
                 )
             }
@@ -956,4 +956,3 @@ private data class MessageMutationTarget(
     val messageId: String,
     val laterTurnCount: Int,
 )
-
