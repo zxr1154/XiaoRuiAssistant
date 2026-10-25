@@ -527,7 +527,7 @@ private fun PaneDock(
         )
         DockEntry(
             icon = Icons.Rounded.SportsBar,
-            label = "角色",
+            label = "角色扮演",
             onClick = onOpenCharacters,
             modifier = Modifier.weight(1f),
         )

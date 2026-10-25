@@ -16,6 +16,12 @@ import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.SearchOff
 import androidx.compose.material.icons.rounded.TheaterComedy
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.testTag
+import io.github.mangi.eta.ui.components.EtaChoiceChip
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.DpSize
@@ -30,6 +36,7 @@ import io.github.mangi.eta.ui.components.EtaPreferenceIcon
 import io.github.mangi.eta.ui.components.EtaTextButton
 import io.github.mangi.eta.ui.components.ListEmptyState
 import io.github.mangi.eta.ui.components.MiuixScaffoldPage
+import io.github.mangi.eta.ui.model.ConversationSummaryUi
 import io.github.mangi.eta.ui.navigation.AppRoute
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
@@ -48,7 +55,10 @@ internal fun CharacterLibraryScreen(
     store: CharacterLibraryStore,
     onNavigate: (AppRoute) -> Unit,
     onBack: () -> Unit,
+    recentStories: List<ConversationSummaryUi> = emptyList(),
+    onOpenStory: (String) -> Unit = {},
 ) {
+    var showStories by rememberSaveable { mutableStateOf(false) }
     val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) store.importCard(uri) { onNavigate(AppRoute.CharacterDetail(it)) }
     }
@@ -60,7 +70,8 @@ internal fun CharacterLibraryScreen(
         onNavigate(AppRoute.CharacterEditor())
     }
     MiuixScaffoldPage(
-        title = "角色",
+        title = "角色扮演",
+        compactTitle = true,
         onBack = onBack,
         actions = {
             IconButton(onClick = importCard, enabled = !store.busy) {
@@ -71,115 +82,151 @@ internal fun CharacterLibraryScreen(
             }
         },
     ) {
-        item(key = "search") {
-            SearchBar(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = CharacterCardPadding)
-                    .padding(top = 4.dp, bottom = 12.dp),
-                // 去掉组件自带的横向内边距，让搜索框与下方卡片左右对齐。
-                insideMargin = DpSize(0.dp, 0.dp),
-                expanded = false,
-                onExpandedChange = {},
-                inputField = {
-                    InputField(
-                        query = store.query,
-                        onQueryChange = { store.query = it },
-                        onSearch = { store.query = it },
-                        expanded = false,
-                        onExpandedChange = {},
-                        label = "搜索名称或标签",
-                    )
-                },
-                content = {},
+        item(key = "roleplay-module") {
+            RoleplayModuleHeader(
+                characterCount = store.characters.size,
+                storyCount = recentStories.size,
+                enabled = !store.busy,
+                onAssistant = onBack,
+                onCreate = createCharacter,
+                onImport = importCard,
+                onPersona = { onNavigate(AppRoute.CharacterPersona) },
             )
         }
-        when {
-            store.busy && store.characters.isEmpty() -> {
-                item(key = "loading") {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        InfiniteProgressIndicator(size = 28.dp)
-                    }
-                }
-            }
-            store.characters.isEmpty() -> {
-                item(key = "empty-library") {
-                    ListEmptyState(
-                        title = "还没有角色",
-                        summary = "创建一个角色，或导入 PNG、JSON 角色卡开始对话",
-                        icon = Icons.Rounded.TheaterComedy,
-                        action = {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                EtaTextButton(
-                                    text = "恢复默认角色",
-                                    onClick = { store.restoreDefaultCharacter() },
-                                    enabled = !store.busy,
-                                )
-                                EtaTextButton(
-                                    text = "创建角色",
-                                    onClick = createCharacter,
-                                    colors = ButtonDefaults.textButtonColorsPrimary(),
-                                )
-                            }
-                        },
-                    )
-                }
-            }
-            store.filteredCharacters.isEmpty() -> {
-                item(key = "empty-search") {
-                    ListEmptyState(
-                        title = "没有找到匹配的角色",
-                        summary = "换个关键词试试，搜索会匹配名称与标签",
-                        icon = Icons.Rounded.SearchOff,
-                    )
-                }
-            }
-        }
-        // 两列竖版卡片：每行一个 Lazy 项，长列表仍按行组合。未搜索时末尾追加一张新建卡，
-        // 既补齐单数时的空位，也让创建与导入在网格中就近可达。
-        val showAddTile = store.query.isBlank() && store.characters.isNotEmpty()
-        val tiles: List<CharacterProfile?> = store.filteredCharacters + if (showAddTile) listOf(null) else emptyList()
-        val rows = tiles.chunked(2)
-        items(rows, key = { row -> row.joinToString("|") { it?.id ?: "add" } }) { row ->
+        item(key = "workspace-section") {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = CharacterCardPadding)
-                    .padding(bottom = CharacterGridSpacing),
-                horizontalArrangement = Arrangement.spacedBy(CharacterGridSpacing),
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                row.forEach { profile ->
-                    if (profile == null) {
-                        CharacterAddTile(
-                            enabled = !store.busy,
-                            onCreate = createCharacter,
-                            onImport = importCard,
-                            modifier = Modifier.weight(1f),
+                EtaChoiceChip("角色库", !showStories, { showStories = false }, modifier = Modifier.testTag("roleplay-library-tab"))
+                EtaChoiceChip("剧情记录", showStories, { showStories = true }, modifier = Modifier.testTag("roleplay-stories-tab"))
+            }
+        }
+        if (showStories) {
+            if (recentStories.isEmpty()) {
+                item(key = "empty-stories") {
+                    ListEmptyState(
+                        title = "还没有剧情", summary = "在角色库选择一个角色，开始第一段故事",
+                        icon = Icons.Rounded.TheaterComedy,
+                        action = { EtaTextButton(text = "去角色库", onClick = { showStories = false }) },
+                    )
+                }
+            }
+            items(recentStories, key = { "story-${it.id}" }) { story ->
+                RoleplayStoryRow(story, onOpenStory)
+            }
+        } else {
+            item(key = "characters-title") { EtaPreferenceGroupTitle("角色库") }
+            item(key = "search") {
+                SearchBar(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = CharacterCardPadding)
+                        .padding(top = 4.dp, bottom = 12.dp),
+                    // 去掉组件自带的横向内边距，让搜索框与下方卡片左右对齐。
+                    insideMargin = DpSize(0.dp, 0.dp),
+                    expanded = false,
+                    onExpandedChange = {},
+                    inputField = {
+                        InputField(
+                            query = store.query,
+                            onQueryChange = { store.query = it },
+                            onSearch = { store.query = it },
+                            expanded = false,
+                            onExpandedChange = {},
+                            label = "搜索名称或标签",
                         )
-                    } else {
-                        CharacterPortraitCard(
-                            profile = profile,
-                            onClick = { if (!store.busy) onNavigate(AppRoute.CharacterDetail(profile.id)) },
-                            onToggleFavorite = { store.toggleFavorite(profile.id) },
-                            modifier = Modifier.weight(1f),
+                    },
+                    content = {},
+                )
+            }
+            when {
+                store.busy && store.characters.isEmpty() -> {
+                    item(key = "loading") {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            InfiniteProgressIndicator(size = 28.dp)
+                        }
+                    }
+                }
+                store.characters.isEmpty() -> {
+                    item(key = "empty-library") {
+                        ListEmptyState(
+                            title = "还没有角色",
+                            summary = "创建一个角色，或导入 PNG、JSON 角色卡开始对话",
+                            icon = Icons.Rounded.TheaterComedy,
+                            action = {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    EtaTextButton(
+                                        text = "恢复默认角色",
+                                        onClick = { store.restoreDefaultCharacter() },
+                                        enabled = !store.busy,
+                                    )
+                                    EtaTextButton(
+                                        text = "创建角色",
+                                        onClick = createCharacter,
+                                        colors = ButtonDefaults.textButtonColorsPrimary(),
+                                    )
+                                }
+                            },
                         )
                     }
                 }
-                if (row.size == 1) Spacer(Modifier.weight(1f))
+                store.filteredCharacters.isEmpty() -> {
+                    item(key = "empty-search") {
+                        ListEmptyState(
+                            title = "没有找到匹配的角色",
+                            summary = "换个关键词试试，搜索会匹配名称与标签",
+                            icon = Icons.Rounded.SearchOff,
+                        )
+                    }
+                }
             }
-        }
-        item(key = "persona-title") { EtaPreferenceGroupTitle("我的") }
-        item(key = "persona") {
-            EtaPreferenceGroup {
-                EtaArrowPreference(
-                    title = "我的人设",
-                    startAction = { EtaPreferenceIcon(Icons.Rounded.Face, tint = EtaPreferenceColors.Blue) },
-                    summary = "角色对你的称呼与你在故事中的身份",
-                    onClick = { onNavigate(AppRoute.CharacterPersona) },
-                )
+            // 两列竖版卡片：每行一个 Lazy 项，长列表仍按行组合。未搜索时末尾追加一张新建卡，
+            // 既补齐单数时的空位，也让创建与导入在网格中就近可达。
+            val showAddTile = store.query.isBlank() && store.characters.isNotEmpty()
+            val tiles: List<CharacterProfile?> = store.filteredCharacters + if (showAddTile) listOf(null) else emptyList()
+            val rows = tiles.chunked(2)
+            items(rows, key = { row -> row.joinToString("|") { it?.id ?: "add" } }) { row ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = CharacterCardPadding)
+                        .padding(bottom = CharacterGridSpacing),
+                    horizontalArrangement = Arrangement.spacedBy(CharacterGridSpacing),
+                ) {
+                    row.forEach { profile ->
+                        if (profile == null) {
+                            CharacterAddTile(
+                                enabled = !store.busy,
+                                onCreate = createCharacter,
+                                onImport = importCard,
+                                modifier = Modifier.weight(1f),
+                            )
+                        } else {
+                            CharacterPortraitCard(
+                                profile = profile,
+                                onClick = { if (!store.busy) onNavigate(AppRoute.CharacterDetail(profile.id)) },
+                                onToggleFavorite = { store.toggleFavorite(profile.id) },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                    if (row.size == 1) Spacer(Modifier.weight(1f))
+                }
+            }
+            item(key = "persona-title") { EtaPreferenceGroupTitle("我的") }
+            item(key = "persona") {
+                EtaPreferenceGroup {
+                    EtaArrowPreference(
+                        title = "我的人设",
+                        startAction = { EtaPreferenceIcon(Icons.Rounded.Face, tint = EtaPreferenceColors.Blue) },
+                        summary = "角色对你的称呼与你在故事中的身份",
+                        onClick = { onNavigate(AppRoute.CharacterPersona) },
+                    )
+                }
             }
         }
     }

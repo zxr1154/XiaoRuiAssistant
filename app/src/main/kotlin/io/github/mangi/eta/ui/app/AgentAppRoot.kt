@@ -74,6 +74,10 @@ import io.github.mangi.eta.ui.screens.characters.CharacterLibraryScreen
 import io.github.mangi.eta.ui.screens.characters.CharacterMemoryScreen
 import io.github.mangi.eta.ui.screens.characters.CharacterPersonaScreen
 import io.github.mangi.eta.ui.screens.enhance.SystemEnhanceScreen
+import io.github.mangi.eta.ui.model.AppModule
+import io.github.mangi.eta.ui.model.forModule
+import io.github.mangi.eta.ui.model.isRoleplayConversation
+import io.github.mangi.eta.ui.screens.characters.RoleplayChatScreen
 import io.github.mangi.eta.ui.screens.home.AgentHomeScreen
 import io.github.mangi.eta.ui.screens.mcp.McpServerDetailScreen
 import io.github.mangi.eta.ui.screens.mcp.McpServersScreen
@@ -142,7 +146,7 @@ fun AgentAppRoot(
     val agentState = appViewModel.state
     val runtimeActive by AgentRuntimeService.keepScreenOn.collectAsState()
     val view = LocalView.current
-    val keepScreenOn = backStack.lastOrNull() == AppRoute.Home &&
+    val keepScreenOn = (backStack.lastOrNull() == AppRoute.Home || backStack.lastOrNull() == AppRoute.RoleplayChat) &&
         agentState.homeState.isStreaming && runtimeActive
     DisposableEffect(view, keepScreenOn) {
         view.keepScreenOn = keepScreenOn
@@ -218,11 +222,19 @@ fun AgentAppRoot(
         RuntimeConfigRepository.ensureDefaults(EtaApp.serviceInstance)
     }
 
+    LaunchedEffect(Unit) {
+        if (agentState.isRoleplayConversationSelected) {
+            agentState.conversationPaneState.selectedConversationId?.let(agentState::selectConversation)
+            if (navigator.current() == AppRoute.Home) navigator.openRoleplayChat()
+        }
+    }
+
     LaunchedEffect(requestedConversationId) {
         val conversationId = requestedConversationId ?: return@LaunchedEffect
+        val roleplay = agentState.conversationPaneState.conversations.any { it.id == conversationId && it.isRoleplayConversation }
         agentState.selectConversation(conversationId)
         conversationPaneOpen = false
-        navigator.popToHome()
+        if (roleplay) navigator.openRoleplayChat() else navigator.popToHome()
         onRequestedConversationOpened()
     }
 
@@ -261,10 +273,28 @@ fun AgentAppRoot(
         }
     }
 
+    fun openAssistantModule() {
+        focusManager.clearFocus()
+        conversationPaneOpen = false
+        agentState.updateSearchQuery("")
+        agentState.openAssistantWorkspace()
+        navigator.popToHome()
+    }
+
+    fun openRoleplayModule() {
+        focusManager.clearFocus()
+        conversationPaneOpen = false
+        agentState.rememberAssistantWorkspace()
+        agentState.updateSearchQuery("")
+        navigator.openRoleplayModule()
+    }
+
     fun selectConversation(conversationId: String) {
+        val roleplay = agentState.conversationPaneState.conversations.any { it.id == conversationId && it.isRoleplayConversation }
         focusManager.clearFocus()
         agentState.selectConversation(conversationId)
         conversationPaneOpen = false
+        if (roleplay) navigator.openRoleplayChat() else navigator.popToHome()
     }
 
     fun createConversation() {
@@ -281,13 +311,13 @@ fun AgentAppRoot(
         AgentAppShell(
             currentRoute = route,
             isCurrentRoute = backStack.lastOrNull() == route,
-            conversationPaneState = agentState.conversationPaneState,
+            conversationPaneState = agentState.conversationPaneState.forModule(if (route is AppRoute.RoleplayChat) AppModule.Roleplay else AppModule.Assistant),
             isConversationPaneOpen = conversationPaneOpen,
             onBack = { popRoute() },
             onOpenConversationPane = { conversationPaneOpen = true },
             onDismissConversationPane = { conversationPaneOpen = false },
             onSearchConversations = { query -> agentState.updateSearchQuery(query) },
-            onNewConversation = { createConversation() },
+            onNewConversation = { if (route is AppRoute.RoleplayChat) openRoleplayModule() else createConversation() },
             onOpenTerminal = { pushRoute(AppRoute.Terminal) },
             onLaunchKimiWeb = {
                 requestExecutionNotifications()
@@ -328,11 +358,11 @@ fun AgentAppRoot(
             },
             onOpenTools = { pushRoute(AppRoute.Tools) },
             onOpenSkills = { pushRoute(AppRoute.Skills) },
-            onOpenCharacters = { pushRoute(AppRoute.Characters) },
+            onOpenCharacters = { openRoleplayModule() },
             onOpenPermissions = { pushRoute(AppRoute.Permissions) },
             onOpenSettings = { pushRoute(AppRoute.Settings) },
             onOpenModelProviders = { pushRoute(AppRoute.ModelProviders) },
-            homeCharacter = if (route is AppRoute.Home) agentState.homeState.roleplayChatUi() else null,
+            homeCharacter = if (route is AppRoute.RoleplayChat) agentState.homeState.roleplayChatUi() else null,
             onOpenCharacter = {
                 agentState.homeState.roleplay?.let { pushRoute(AppRoute.CharacterDetail(it.characterId)) }
             },
@@ -343,6 +373,85 @@ fun AgentAppRoot(
                     .padding(padding)
             ) {
                 content()
+            }
+        }
+    }
+
+    fun handleChatAction(action: AgentHomeAction) {
+        when (action) {
+            is AgentHomeAction.ReasoningEffortChanged ->
+                agentState.updateReasoningEffort(action.effort)
+            AgentHomeAction.CompactContext -> agentState.compactCurrentContext()
+            AgentHomeAction.LoadEarlierMessages -> agentState.loadEarlierMessages()
+            is AgentHomeAction.HistoryViewportChanged -> agentState.updateHistoryViewport(action.atLatest)
+            AgentHomeAction.RetryConversationLoad -> agentState.retryConversationLoad()
+            is AgentHomeAction.ModelSelected -> agentState.selectModel(action.modelId)
+            is AgentHomeAction.SubmitMessage -> { requestExecutionNotifications(); agentState.sendCurrentMessage(action.text) }
+            is AgentHomeAction.InterruptAndSubmitMessage -> { requestExecutionNotifications(); agentState.interruptAndSendCurrentMessage(action.text) }
+            is AgentHomeAction.SteerQueuedMessage -> { requestExecutionNotifications(); agentState.steerQueuedMessage(action.id) }
+            is AgentHomeAction.RecallQueuedMessage -> agentState.recallQueuedMessage(action.id, action.currentDraftText)
+            is AgentHomeAction.RemoveQueuedMessage -> agentState.removeQueuedMessage(action.id)
+            AgentHomeAction.StopRun -> agentState.stopCurrentRun()
+            is AgentHomeAction.ImageAttached -> agentState.attachImage(action.uri)
+            is AgentHomeAction.RemoveImage -> agentState.removePendingImage(action.id)
+            is AgentHomeAction.FilesAttached -> agentState.attachFiles(action.uris)
+            is AgentHomeAction.FolderAttached -> agentState.attachFolder(action.uri)
+            is AgentHomeAction.FilePathAttached -> agentState.attachFilePath(action.path)
+            is AgentHomeAction.RemoveFileReference ->
+                agentState.removePendingFileReference(action.id)
+            is AgentHomeAction.EditMessage -> agentState.beginMessageEdit(action.id)
+            AgentHomeAction.CancelMessageEdit -> agentState.cancelMessageEdit()
+            is AgentHomeAction.DeleteMessage -> {
+                agentState.messageRevisionImpact(action.id)?.let { impact ->
+                    messageDeleteTarget = MessageMutationTarget(action.id, impact.laterTurnCount)
+                }
+            }
+            is AgentHomeAction.RegenerateMessage -> {
+                val impact = agentState.messageRevisionImpact(action.id)
+                if (agentState.homeState.roleplay != null || impact?.laterTurnCount == 0) {
+                    agentState.regenerateMessage(action.id)
+                } else if (impact != null) {
+                    messageRegenerateTarget = MessageMutationTarget(action.id, impact.laterTurnCount)
+                }
+            }
+            is AgentHomeAction.SelectReplyCandidate -> agentState.selectReplyCandidate(action.id, action.index)
+            AgentHomeAction.OpenTools -> pushRoute(AppRoute.Tools)
+            AgentHomeAction.OpenSkills -> pushRoute(AppRoute.Skills)
+            AgentHomeAction.OpenPermissions -> pushRoute(AppRoute.Permissions)
+            AgentHomeAction.OpenSystemEnhance -> pushRoute(AppRoute.SystemEnhance)
+            AgentHomeAction.OpenSettings -> pushRoute(AppRoute.Settings)
+            AgentHomeAction.OpenBrowser -> pushRoute(AppRoute.Browser)
+            AgentHomeAction.OpenCharacters -> openRoleplayModule()
+            AgentHomeAction.ExpandRunTrace -> Unit
+        }
+    }
+
+    @Composable
+    fun ChatWorkspace(roleplay: Boolean) {
+        RoutedShell(if (roleplay) AppRoute.RoleplayChat else AppRoute.Home) {
+            if (roleplay) {
+                RoleplayChatScreen(
+                    onAssistant = ::openAssistantModule,
+                    state = agentState.homeState,
+                    modelPickerState = agentState.modelPickerState,
+                    conversationKey = agentState.conversationPaneState.selectedConversationId,
+                    onAction = ::handleChatAction,
+                    isLoadingConversation = agentState.isLoadingConversation,
+                    conversationLoadFailed = agentState.conversationLoadFailed,
+                    historyLoadState = agentState.historyLoadState,
+                    isDrawerOpen = conversationPaneOpen,
+                )
+            } else {
+                AgentHomeScreen(
+                    state = agentState.homeState,
+                    modelPickerState = agentState.modelPickerState,
+                    conversationKey = agentState.conversationPaneState.selectedConversationId,
+                    onAction = ::handleChatAction,
+                    isLoadingConversation = agentState.isLoadingConversation,
+                    conversationLoadFailed = agentState.conversationLoadFailed,
+                    historyLoadState = agentState.historyLoadState,
+                    isDrawerOpen = conversationPaneOpen,
+                )
             }
         }
     }
@@ -363,67 +472,8 @@ fun AgentAppRoot(
                 cornerClipRadius = rememberNavSystemCornerRadius(),
             ),
         ) {
-            entry<AppRoute.Home>(swipeDismiss = swipeDismiss) {
-                RoutedShell(route = AppRoute.Home) {
-                    AgentHomeScreen(
-                        state = agentState.homeState,
-                        modelPickerState = agentState.modelPickerState,
-                        conversationKey = agentState.conversationPaneState.selectedConversationId,
-                        onAction = { action ->
-                            when (action) {
-                                is AgentHomeAction.ReasoningEffortChanged ->
-                                    agentState.updateReasoningEffort(action.effort)
-                                AgentHomeAction.CompactContext -> agentState.compactCurrentContext()
-                                AgentHomeAction.LoadEarlierMessages -> agentState.loadEarlierMessages()
-                                is AgentHomeAction.HistoryViewportChanged -> agentState.updateHistoryViewport(action.atLatest)
-                                AgentHomeAction.RetryConversationLoad -> agentState.retryConversationLoad()
-                                is AgentHomeAction.ModelSelected -> agentState.selectModel(action.modelId)
-                                is AgentHomeAction.SubmitMessage -> { requestExecutionNotifications(); agentState.sendCurrentMessage(action.text) }
-                                is AgentHomeAction.InterruptAndSubmitMessage -> { requestExecutionNotifications(); agentState.interruptAndSendCurrentMessage(action.text) }
-                                is AgentHomeAction.SteerQueuedMessage -> { requestExecutionNotifications(); agentState.steerQueuedMessage(action.id) }
-                                is AgentHomeAction.RecallQueuedMessage -> agentState.recallQueuedMessage(action.id, action.currentDraftText)
-                                is AgentHomeAction.RemoveQueuedMessage -> agentState.removeQueuedMessage(action.id)
-                                AgentHomeAction.StopRun -> agentState.stopCurrentRun()
-                                is AgentHomeAction.ImageAttached -> agentState.attachImage(action.uri)
-                                is AgentHomeAction.RemoveImage -> agentState.removePendingImage(action.id)
-                                is AgentHomeAction.FilesAttached -> agentState.attachFiles(action.uris)
-                                is AgentHomeAction.FolderAttached -> agentState.attachFolder(action.uri)
-                                is AgentHomeAction.FilePathAttached -> agentState.attachFilePath(action.path)
-                                is AgentHomeAction.RemoveFileReference ->
-                                    agentState.removePendingFileReference(action.id)
-                                is AgentHomeAction.EditMessage -> agentState.beginMessageEdit(action.id)
-                                AgentHomeAction.CancelMessageEdit -> agentState.cancelMessageEdit()
-                                is AgentHomeAction.DeleteMessage -> {
-                                    agentState.messageRevisionImpact(action.id)?.let { impact ->
-                                        messageDeleteTarget = MessageMutationTarget(action.id, impact.laterTurnCount)
-                                    }
-                                }
-                                is AgentHomeAction.RegenerateMessage -> {
-                                    val impact = agentState.messageRevisionImpact(action.id)
-                                    if (agentState.homeState.roleplay != null || impact?.laterTurnCount == 0) {
-                                        agentState.regenerateMessage(action.id)
-                                    } else if (impact != null) {
-                                        messageRegenerateTarget = MessageMutationTarget(action.id, impact.laterTurnCount)
-                                    }
-                                }
-                                is AgentHomeAction.SelectReplyCandidate -> agentState.selectReplyCandidate(action.id, action.index)
-                                AgentHomeAction.OpenTools -> pushRoute(AppRoute.Tools)
-                                AgentHomeAction.OpenSkills -> pushRoute(AppRoute.Skills)
-                                AgentHomeAction.OpenPermissions -> pushRoute(AppRoute.Permissions)
-                                AgentHomeAction.OpenSystemEnhance -> pushRoute(AppRoute.SystemEnhance)
-                                AgentHomeAction.OpenSettings -> pushRoute(AppRoute.Settings)
-                                AgentHomeAction.OpenBrowser -> pushRoute(AppRoute.Browser)
-                                AgentHomeAction.OpenCharacters -> pushRoute(AppRoute.Characters)
-                                AgentHomeAction.ExpandRunTrace -> Unit
-                            }
-                        },
-                        isLoadingConversation = agentState.isLoadingConversation,
-                        conversationLoadFailed = agentState.conversationLoadFailed,
-                        historyLoadState = agentState.historyLoadState,
-                        isDrawerOpen = conversationPaneOpen,
-                    )
-                }
-            }
+            entry<AppRoute.Home>(swipeDismiss = swipeDismiss) { ChatWorkspace(roleplay = false) }
+            entry<AppRoute.RoleplayChat>(swipeDismiss = swipeDismiss) { ChatWorkspace(roleplay = true) }
             entry<AppRoute.Browser>(swipeDismiss = swipeDismiss) {
                 RoutedShell(route = AppRoute.Browser) {
                     AgentBrowserScreen()
@@ -480,7 +530,13 @@ fun AgentAppRoot(
                 LaunchedEffect(backStack.lastOrNull() == AppRoute.Characters) {
                     if (backStack.lastOrNull() == AppRoute.Characters) characterStore.loadLibrary()
                 }
-                CharacterLibraryScreen(characterStore, { if (navigator.current() == AppRoute.Characters) pushRoute(it) }, ::popRoute)
+                CharacterLibraryScreen(
+                    store = characterStore,
+                    onNavigate = { if (navigator.current() == AppRoute.Characters) pushRoute(it) },
+                    onBack = ::openAssistantModule,
+                    recentStories = agentState.conversationPaneState.forModule(AppModule.Roleplay).conversations,
+                    onOpenStory = ::selectConversation,
+                )
             }
             entry<AppRoute.CharacterDetail>(swipeDismiss = swipeDismiss) { route ->
                 LaunchedEffect(route.characterId, backStack.lastOrNull() == route) {
@@ -490,8 +546,8 @@ fun AgentAppRoot(
                     if (navigator.current() == route) {
                         agentState.startCharacterConversation(binding, greeting)
                         conversationPaneOpen = false
-                        navigator.popToHome()
-                        // 开始新故事直接呈现首页；重置导航呈现态，避免多层退栈扫过角色列表。
+                        navigator.openRoleplayChat()
+                        // 新故事留在角色扮演模块；重置呈现态，避免扫过编辑与详情页面。
                         navigationResetKey++
                     }
                 }
@@ -821,6 +877,11 @@ fun AgentAppRoot(
                 onCancel = { conversationDeleteTarget = null },
                 onConfirm = {
                     agentState.deleteConversation(conversation.id)
+                    if (navigator.current() == AppRoute.RoleplayChat && !agentState.isRoleplayConversationSelected) {
+                        openRoleplayModule()
+                    } else if (navigator.current() == AppRoute.Home && agentState.isRoleplayConversationSelected) {
+                        agentState.openAssistantWorkspace()
+                    }
                     conversationDeleteTarget = null
                 },
             )

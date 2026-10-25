@@ -48,6 +48,7 @@ import io.github.mangi.eta.data.repository.EtaBackupRepository
 import io.github.mangi.eta.data.repository.EtaBackupSummary
 import io.github.mangi.eta.data.repository.ProviderRepository
 import io.github.mangi.eta.data.repository.RuntimeConfigRepository
+import io.github.mangi.eta.ui.model.isRoleplayConversation
 import io.github.mangi.eta.ui.model.AgentChatHomeUiState
 import io.github.mangi.eta.ui.model.AgentChatMessageUi
 import io.github.mangi.eta.ui.model.AgentMessageUi
@@ -132,6 +133,10 @@ internal class AgentAppState(
     var historyLoadState by mutableStateOf(ConversationHistoryLoadState.Idle)
         private set
     val isLoadingEarlierMessages: Boolean get() = historyLoadState == ConversationHistoryLoadState.Loading
+
+    private var lastAssistantConversationId: String? = null
+    private var assistantDraftSnapshot: AgentChatHomeUiState? = null
+    val isRoleplayConversationSelected: Boolean get() = homeState.isRoleplayConversation
 
     private var selectedConversationId: String? = initialConversations.selectedConversationId
     private var conversationsById: Map<String, AgentChatHomeUiState> = initialConversations.conversationsById
@@ -750,6 +755,10 @@ internal class AgentAppState(
     }
 
     fun selectConversation(conversationId: String) {
+        if (conversationsById[conversationId]?.isRoleplayConversation == true) {
+            rememberAssistantWorkspace()
+            ConversationModePreference.setMode(appContext, conversationId, ConversationModePreference.ROLEPLAY)
+        }
         if (homeState.messageEdit != null) cancelMessageEdit()
         val state = conversationsById[conversationId] ?: return
         val selectionVersion = ++conversationSelectionVersion
@@ -942,6 +951,29 @@ internal class AgentAppState(
         }
     }
 
+    fun rememberAssistantWorkspace() {
+        if (homeState.isRoleplayConversation) return
+        lastAssistantConversationId = selectedConversationId
+        if (selectedConversationId == null) assistantDraftSnapshot = homeState
+    }
+
+    fun openAssistantWorkspace() {
+        if (!homeState.isRoleplayConversation) return
+        val previous = if (assistantDraftSnapshot != null && lastAssistantConversationId == null) null else lastAssistantConversationId?.takeIf { id ->
+            conversationsById[id]?.isRoleplayConversation == false
+        } ?: conversationsById.entries.filter { !it.value.isRoleplayConversation }
+            .maxByOrNull { conversationUpdatedAt[it.key] ?: 0L }?.key
+        if (previous != null) {
+            selectConversation(previous)
+        } else {
+            createConversation()
+            assistantDraftSnapshot?.let { draft ->
+                homeState = draft.copy(inputSyncVersion = homeState.inputSyncVersion + 1)
+                refreshConversationModel()
+            }
+        }
+    }
+
     fun createConversation() {
         conversationSelectionVersion += 1
         cancelHistoryPageLoad()
@@ -962,6 +994,7 @@ internal class AgentAppState(
     }
 
     fun startCharacterConversation(binding: RoleplayBinding, greeting: String) {
+        rememberAssistantWorkspace()
         createConversation()
         val id = newConversationId()
         ConversationModePreference.initializeConversation(appContext, id, hasCharacter = true)

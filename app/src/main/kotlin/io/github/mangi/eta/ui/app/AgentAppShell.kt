@@ -159,7 +159,7 @@ internal fun AgentAppShell(
     }
 
     Box(modifier = modifier.fillMaxSize()) {
-        if (conversationPaneState != null && currentRoute is AppRoute.Home) {
+        if (conversationPaneState != null && (currentRoute is AppRoute.Home || currentRoute is AppRoute.RoleplayChat)) {
             ConversationSidePaneScaffold(
                 state = conversationPaneState,
                 visible = isConversationPaneOpen,
@@ -204,7 +204,7 @@ private fun AgentTopBar(
     homeCharacter: RoleplayChatUi?,
     onOpenCharacter: () -> Unit,
 ) {
-    val isHome = route is AppRoute.Home
+    val isHome = route is AppRoute.Home || route is AppRoute.RoleplayChat
     val navigationIcon: @Composable () -> Unit = {
         if (isHome) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -227,6 +227,7 @@ private fun AgentTopBar(
     val actions: @Composable RowScope.() -> Unit = {
         if (isHome) {
             TopBarOverflowMenu(
+                isRoleplay = route is AppRoute.RoleplayChat,
                 onNewConversation = onNewConversation,
                 onOpenTerminal = onOpenTerminal,
                 onLaunchKimiWeb = onLaunchKimiWeb,
@@ -269,6 +270,7 @@ private val TopBarMenuIconSize = 20.dp
  */
 @Composable
 private fun TopBarOverflowMenu(
+    isRoleplay: Boolean,
     onNewConversation: () -> Unit,
     onOpenTerminal: () -> Unit,
     onLaunchKimiWeb: () -> Unit,
@@ -296,7 +298,7 @@ private fun TopBarOverflowMenu(
             alignment = PopupPositionProvider.Align.End,
             onDismissRequest = { showMenu = false },
         ) {
-            val newConversationText = stringResource(R.string.action_new_conversation)
+            val newConversationText = if (isRoleplay) "开始新剧情" else stringResource(R.string.action_new_conversation)
             val openTerminalText = stringResource(R.string.action_open_terminal)
             val launchKimiWebText = kimiWebLabel
             val stopKimiWebText = stringResource(R.string.capability_kimi_stop)
@@ -420,12 +422,13 @@ private fun TopBarOverflowMenu(
 @Composable
 private fun titleForRoute(route: AppRoute?): String = when (route) {
     is AppRoute.Home -> ""
+    is AppRoute.RoleplayChat -> ""
     is AppRoute.Browser -> stringResource(R.string.route_browser)
     is AppRoute.Terminal -> stringResource(R.string.route_terminal)
     is AppRoute.Tools -> stringResource(R.string.route_tools)
     is AppRoute.WebToolsSettings -> stringResource(R.string.web_tools_settings_title)
     is AppRoute.Skills -> stringResource(R.string.route_skills)
-    is AppRoute.Characters -> "角色"
+    is AppRoute.Characters -> "角色扮演"
     is AppRoute.CharacterDetail -> "角色详情"
     is AppRoute.CharacterEditor -> "编辑角色"
     is AppRoute.CharacterPersona -> "我的人设"

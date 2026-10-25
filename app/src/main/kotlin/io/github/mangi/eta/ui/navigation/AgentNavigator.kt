@@ -46,5 +46,15 @@ class AgentNavigator(
         }
     }
 
+    fun openRoleplayModule() {
+        popToHome()
+        push(AppRoute.Characters)
+    }
+
+    fun openRoleplayChat() {
+        openRoleplayModule()
+        push(AppRoute.RoleplayChat)
+    }
+
     fun current(): NavKey? = backStack.lastOrNull()
 }

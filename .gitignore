@@ -24,6 +24,7 @@ output-metadata.json
 *.log
 *.jks
 *.keystore
+!/app/debug/xiaorui-debug.keystore
 keystore.properties
 google-services.json
 

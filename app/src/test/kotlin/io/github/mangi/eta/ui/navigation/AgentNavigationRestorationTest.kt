@@ -20,6 +20,40 @@ import top.yukonga.miuix.kmp.nav.core.rememberNavBackStack
 @Config(application = Application::class, sdk = [34])
 class AgentNavigationRestorationTest {
     @Test
+    fun roleplayChatReturnsToItsModuleBeforeReturningHome() {
+        val controller = Robolectric.buildActivity(NavigationActivity::class.java).setup().visible()
+        try {
+            controller.get().compose()
+            val navigator = AgentNavigator(controller.get().backStack)
+            navigator.push(AppRoute.CharacterEditor("card"))
+            navigator.openRoleplayChat()
+            assertEquals(listOf(AppRoute.Home, AppRoute.Characters, AppRoute.RoleplayChat), controller.get().backStack.toList())
+            navigator.pop()
+            assertEquals(AppRoute.Characters, navigator.current())
+            navigator.popToHome()
+            assertEquals(listOf(AppRoute.Home), controller.get().backStack.toList())
+        } finally {
+            controller.pause().stop().destroy()
+        }
+    }
+
+    @Test
+    fun activityRecreationPreservesTheRoleplayModuleAndChatRoute() {
+        val first = Robolectric.buildActivity(NavigationActivity::class.java).setup().visible()
+        first.get().compose()
+        AgentNavigator(first.get().backStack).openRoleplayChat()
+        val savedState = Bundle()
+        first.pause().saveInstanceState(savedState).stop().destroy()
+        val restored = Robolectric.buildActivity(NavigationActivity::class.java).create(savedState).start().resume().visible()
+        try {
+            restored.get().compose()
+            assertEquals(listOf(AppRoute.Home, AppRoute.Characters, AppRoute.RoleplayChat), restored.get().backStack.toList())
+        } finally {
+            restored.pause().stop().destroy()
+        }
+    }
+
+    @Test
     fun `Activity 重建后保留完整页面栈`() {
         val first = Robolectric.buildActivity(NavigationActivity::class.java).setup().visible()
         first.get().compose()

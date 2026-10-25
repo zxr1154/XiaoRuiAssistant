@@ -16,6 +16,7 @@ import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import io.github.mangi.eta.agent.roleplay.ConversationModePreference
 import io.github.mangi.eta.agent.roleplay.RoleplayBinding
@@ -50,14 +51,14 @@ class AgentHomeModeUiTest {
         context.getSharedPreferences("eta_conversation_modes", 0).edit().clear().commit()
     }
 
-    @Test fun freshHomeShowsAllThreeModesInLightTheme() {
+    @Test fun freshHomeShowsSeparateModulesInLightTheme() {
         showHome()
         assertAllModesVisible()
         ui.onNodeWithTag("conversation-mode-normal").assertIsSelected()
         screenshot("fresh-home-light")
     }
 
-    @Test fun freshHomeShowsAllThreeModesInDarkTheme() {
+    @Test fun freshHomeShowsSeparateModulesInDarkTheme() {
         showHome(dark = true)
         assertAllModesVisible()
         screenshot("fresh-home-dark")
@@ -91,29 +92,22 @@ class AgentHomeModeUiTest {
     @Test fun roleplayWithoutACardOpensCharacterLibrary() {
         val actions = mutableListOf<AgentHomeAction>()
         showHome(onAction = actions::add)
-        ui.onNodeWithTag("conversation-mode-roleplay").performClick()
+        ui.onNodeWithTag("module-roleplay").performClick()
         ui.runOnIdle { assertEquals(listOf(AgentHomeAction.OpenCharacters), actions) }
         ui.onNodeWithTag("conversation-mode-normal").assertIsSelected()
     }
 
-    @Test fun characterConversationCanSwitchAllThreeModes() {
-        showHome(
-            state = emptyState.copy(roleplay = RoleplayBinding("card", "{}", "测试角色")),
-            conversationId = "character-chat",
-        )
-        ui.onNodeWithTag("conversation-mode-roleplay").assertIsSelected()
-        ui.onNodeWithTag("conversation-mode-normal").performClick().assertIsSelected()
-        ui.onNodeWithTag("conversation-mode-freedom").performClick().assertIsSelected()
-        ui.onNodeWithTag("conversation-mode-roleplay").performClick().assertIsSelected()
-        ui.runOnIdle {
-            assertEquals(ConversationModePreference.ROLEPLAY, ConversationModePreference.getMode(context, "character-chat"))
-        }
+    @Test fun roleplayModuleEntryStaysAvailableWhileAssistantIsReplying() {
+        val actions = mutableListOf<AgentHomeAction>()
+        showHome(state = emptyState.copy(isStreaming = true), onAction = actions::add)
+        ui.onNodeWithTag("module-roleplay").performClick()
+        ui.runOnIdle { assertEquals(listOf(AgentHomeAction.OpenCharacters), actions) }
     }
 
     @Test fun replyKeepsModeControlsVisibleAndDisabled() {
         showHome(state = emptyState.copy(isStreaming = true), conversationId = "reply")
         assertAllModesVisible()
-        listOf("normal", "freedom", "roleplay").forEach {
+        listOf("normal", "freedom").forEach {
             ui.onNodeWithTag("conversation-mode-$it").assertIsNotEnabled()
         }
     }
@@ -145,13 +139,16 @@ class AgentHomeModeUiTest {
     }
 
     private fun assertAllModesVisible() {
-        listOf("normal", "freedom", "roleplay").forEach {
+        listOf("normal", "freedom").forEach {
             ui.onNodeWithTag("conversation-mode-$it").assertIsDisplayed()
         }
+        ui.onNodeWithTag("module-assistant").assertIsDisplayed().assertIsSelected()
+        ui.onNodeWithTag("module-roleplay").assertIsDisplayed()
+        ui.onNodeWithTag("conversation-mode-roleplay").assertDoesNotExist()
     }
 
     private fun screenshot(name: String) {
-        val bitmap = ui.onNodeWithTag("conversation-mode-bar").captureToImage().asAndroidBitmap()
+        val bitmap = ui.onRoot().captureToImage().asAndroidBitmap()
         val file = File("build/reports/mode-ui/$name.png")
         file.parentFile.mkdirs()
         file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
