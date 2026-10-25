@@ -268,8 +268,15 @@ fun AgentAppRoot(
     }
 
     fun popRoute() {
-        if (!navigator.pop()) {
+        if (navigator.current() == AppRoute.Characters) {
+            conversationPaneOpen = false
+            agentState.updateSearchQuery("")
+            agentState.openAssistantWorkspace()
+            navigator.popToHome()
+        } else if (!navigator.pop()) {
             (context as? Activity)?.finish()
+        } else if (navigator.current() == AppRoute.Home && agentState.isRoleplayConversationSelected) {
+            navigator.openRoleplayChat()
         }
     }
 
@@ -949,3 +956,4 @@ private data class MessageMutationTarget(
     val messageId: String,
     val laterTurnCount: Int,
 )
+
