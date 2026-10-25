@@ -89,7 +89,11 @@ jobs:
               --title "小瑞的助手 3.4.0 (Debug)" --notes-file "$RUNNER_TEMP/release-notes.md" \
               --prerelease --draft
           fi
-          gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" > "$RUNNER_TEMP/release.json"
+          gh api "repos/$GH_REPO/releases?per_page=100" > "$RUNNER_TEMP/releases.json"
+          RELEASE_ID="$(jq -r --arg tag "$RELEASE_TAG" '.[] | select(.tag_name == $tag) | .id' "$RUNNER_TEMP/releases.json")"
+          test -n "$RELEASE_ID"
+          printf 'RELEASE_ID=%s\n' "$RELEASE_ID" >> "$GITHUB_ENV"
+          gh api "repos/$GH_REPO/releases/$RELEASE_ID" > "$RUNNER_TEMP/release.json"
           jq -e --arg sha "$SOURCE_SHA" '.target_commitish == $sha' "$RUNNER_TEMP/release.json"
           for asset in "$APK_NAME" "$CHECKSUM_NAME"; do
             file="$RUNNER_TEMP/release-files/$asset"
@@ -107,7 +111,7 @@ jobs:
       - name: Verify uploaded assets, publish, and verify download
         run: |
           set -euo pipefail
-          gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" > "$RUNNER_TEMP/release.json"
+          gh api "repos/$GH_REPO/releases/$RELEASE_ID" > "$RUNNER_TEMP/release.json"
           jq -e --arg name "$APK_NAME" --arg digest "sha256:$APK_SHA256" \
             'any(.assets[]; .name == $name and .state == "uploaded" and .digest == $digest and .size == 86308304)' \
             "$RUNNER_TEMP/release.json"
@@ -118,7 +122,7 @@ jobs:
             --dir "$RUNNER_TEMP/download-verified"
           cd "$RUNNER_TEMP/download-verified"
           sha256sum --check --strict "$CHECKSUM_NAME"
-          gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" > "$RUNNER_TEMP/release.json"
+          gh api "repos/$GH_REPO/releases/$RELEASE_ID" > "$RUNNER_TEMP/release.json"
           jq -e '.draft == false and .prerelease == true and .published_at != null' "$RUNNER_TEMP/release.json"
           {
             printf '## Published 3.4.0 Debug APK\n\n'
