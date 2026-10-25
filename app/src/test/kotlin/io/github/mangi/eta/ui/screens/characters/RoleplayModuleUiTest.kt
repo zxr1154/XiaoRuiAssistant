@@ -15,6 +15,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import io.github.mangi.eta.agent.roleplay.RoleplayBinding
+import io.github.mangi.eta.data.db.EtaDatabase
+import io.github.mangi.eta.data.repository.CharacterRepository
 import io.github.mangi.eta.ui.app.CharacterLibraryStore
 import io.github.mangi.eta.ui.model.AgentChatUiState
 import io.github.mangi.eta.ui.model.AgentHomeAction
@@ -26,7 +28,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Before
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -47,10 +51,29 @@ import top.yukonga.miuix.kmp.theme.lightColorScheme
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class RoleplayModuleUiTest {
     @get:Rule val ui = createComposeRule()
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val job = SupervisorJob()
+    private val scope = CoroutineScope(job + Dispatchers.Main.immediate)
     private val story = ConversationSummaryUi("story", "星海的第一封信", "你好", "刚刚", mode = ConversationModeUi.Chat, characterName = "星澜")
 
-    @After fun closeScope() { scope.cancel() }
+    @Before fun prepareCharacterLibrary() = runBlocking(Dispatchers.IO) {
+        val context = RuntimeEnvironment.getApplication()
+        EtaDatabase.closeForTests()
+        context.deleteDatabase("eta.db")
+        context.getSharedPreferences("eta_roleplay", 0).edit().clear().commit()
+        CharacterRepository.initialize(context)
+        CharacterRepository.createDefaultCharacter()
+        Unit
+    }
+
+    @After fun closeScope() {
+        scope.cancel()
+        val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10)
+        while (!job.isCompleted && System.nanoTime() < deadline) {
+            ShadowLooper.idleMainLooper()
+            Thread.sleep(1)
+        }
+        EtaDatabase.closeForTests()
+    }
 
     @Test fun roleplayLibraryHasItsOwnLandingPageAndQuickActions() {
         showLibrary()
