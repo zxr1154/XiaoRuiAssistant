@@ -23,25 +23,25 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Verify source is uploaded
         run: |
           test -f gradlew || { echo "::error::Upload the full modified Eta source to repository root first"; exit 1; }
           test -d app || { echo "::error::Missing app directory"; exit 1; }
       - name: Set up JDK 25
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '25'
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
           packages: platform-tools
           log-accepted-android-sdk-licenses: false
       - name: Install Android SDK 37
         run: sdkmanager --channel=3 "platforms;android-37.0"
       - name: Gradle cache
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
       - name: Make wrapper executable
         run: chmod +x ./gradlew
       - name: Build Debug APK
@@ -61,7 +61,7 @@ jobs:
           --tests 'io.github.mangi.eta.ui.app.AgentWorkspaceModuleTest'
       - name: Upload test reports and mode screenshots
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: XiaoRuiAssistant-mode-ui-verification
           path: |
@@ -71,7 +71,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: XiaoRuiAssistant-debug-apk
           path: app/build/outputs/apk/debug/*.apk
