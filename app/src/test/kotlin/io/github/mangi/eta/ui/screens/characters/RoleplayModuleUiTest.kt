@@ -28,6 +28,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -35,6 +37,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowLooper
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.darkColorScheme
 import top.yukonga.miuix.kmp.theme.lightColorScheme
@@ -110,7 +113,15 @@ class RoleplayModuleUiTest {
             }
         }
         ui.runOnIdle { store.loadLibrary() }
-        ui.waitUntil(15_000) { !store.busy && store.characters.isNotEmpty() }
+        // Robolectric's paused Android looper must deliver the IO completion back to Main.
+        ui.waitUntil(15_000) {
+            ShadowLooper.idleMainLooper()
+            ui.runOnIdle { !store.busy }
+        }
+        ui.runOnIdle {
+            assertNull("Character library load failed: ${store.notice}", store.notice)
+            assertTrue("The seeded character must be present after loading", store.characters.isNotEmpty())
+        }
     }
 
     private fun screenshot(name: String) {
