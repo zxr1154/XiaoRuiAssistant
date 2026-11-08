@@ -1,6 +1,5 @@
 package io.github.mangi.eta.ui.screens.prompts
 
-import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -32,6 +31,7 @@ internal fun PromptTemplateBar(conversationId: String?, enabled: Boolean, onMana
     val flow = remember(context) { runCatching { PromptTemplateRepository.observe(context) }.getOrNull() }
     var choosing by remember(conversationId) { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
+    var saveError by remember(conversationId) { mutableStateOf<String?>(null) }
     if (flow == null) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
             EtaTextButton("提示模板不可用 · 管理", onClick = onManage, modifier = Modifier.testTag("prompt-template-manage"))
@@ -54,29 +54,34 @@ internal fun PromptTemplateBar(conversationId: String?, enabled: Boolean, onMana
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
         EtaTextButton("提示模板：$label", onClick = { choosing = true }, enabled = enabled && !saving,
             modifier = Modifier.weight(1f, fill = false).testTag("prompt-template-select"))
-        EtaTextButton("管理", onClick = onManage, modifier = Modifier.testTag("prompt-template-manage"))
+        EtaTextButton("管理", onClick = onManage, enabled = !saving, modifier = Modifier.testTag("prompt-template-manage"))
     }
     if (choosing) PromptChoiceDialog(
         title = "本会话提示模板",
+        enabled = !saving,
+        summary = if (saving) "正在保存，完成后即可继续对话…" else saveError,
         choices = listOf(
             PromptChoice(null, "自动", if (roleplay) "保持角色原有设定，不添加助手模板" else "按模型、服务商和默认规则选择"),
             PromptChoice("disabled", "不使用", "本会话不添加额外提示模板"),
         ) + document.templates.filter { it.enabled }.map { PromptChoice("template:${it.id}", it.name) },
-        selectedId = selected, onDismiss = { choosing = false }, onSelect = { id ->
-            choosing = false
+        selectedId = selected, onDismiss = { if (!saving) choosing = false }, onSelect = { id ->
+            if (saving) return@PromptChoiceDialog
             val updated = when (id) {
                 null -> PromptTemplateSelection()
                 "disabled" -> PromptTemplateSelection(disabled = true)
                 else -> PromptTemplateSelection(templateId = id.removePrefix("template:"))
             }
             saving = true
+            saveError = null
             scope.launch {
                 try {
                     withContext(Dispatchers.IO) { PromptTemplateRepository.setConversationSelection(context, conversationId, updated) }
+                    // Keep the modal over the composer until the committed selection is visible to Runtime.
+                    choosing = false
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (failure: Exception) {
-                    Toast.makeText(context, failure.message ?: "无法保存模板选择", Toast.LENGTH_LONG).show()
+                    saveError = "未保存，仍使用原选择。${failure.message ?: "请重试或取消。"}"
                 } finally {
                     saving = false
                 }

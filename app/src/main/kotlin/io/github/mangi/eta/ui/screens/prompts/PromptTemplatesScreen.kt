@@ -362,15 +362,16 @@ internal data class PromptChoice(val id: String?, val title: String, val summary
 @Composable
 internal fun PromptChoiceDialog(
     title: String, choices: List<PromptChoice>, selectedId: String?, onDismiss: () -> Unit, onSelect: (String?) -> Unit,
+    enabled: Boolean = true, summary: String? = null,
 ) {
-    EtaWindowDialog(show = true, title = title, onDismissRequest = onDismiss) {
+    EtaWindowDialog(show = true, title = title, summary = summary, onDismissRequest = { if (enabled) onDismiss() }) {
         Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
             choices.forEach { choice ->
-                EtaRadioButtonPreference(choice.title, choice.id == selectedId, { onSelect(choice.id) }, summary = choice.summary,
+                EtaRadioButtonPreference(choice.title, choice.id == selectedId, { onSelect(choice.id) }, summary = choice.summary, enabled = enabled,
                     modifier = Modifier.testTag("prompt-choice-${choice.id ?: "automatic"}"))
             }
         }
-        EtaTextButton("取消", onClick = onDismiss, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+        EtaTextButton("取消", onClick = onDismiss, enabled = enabled, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
     }
 }
 
