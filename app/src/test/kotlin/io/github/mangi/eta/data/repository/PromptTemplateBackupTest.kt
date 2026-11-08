@@ -2,6 +2,7 @@ package io.github.mangi.eta.data.repository
 
 import android.content.Context
 import io.github.mangi.eta.agent.roleplay.CharacterCardCodec
+import io.github.mangi.eta.agent.roleplay.ConversationModePreference
 import io.github.mangi.eta.data.datastore.SettingsDataStore
 import io.github.mangi.eta.data.db.ConversationEntity
 import io.github.mangi.eta.data.db.EtaDatabase
@@ -100,10 +101,20 @@ class PromptTemplateBackupTest {
         CharacterRepository.initialize(context)
         val blocked = CharacterRepository.create(CharacterCardCodec.create("阻塞角色"))
         val database = EtaDatabase.get(context)
+        val originalConversation = ConversationEntity("conversation", "原会话", false, createdAt = 1, updatedAt = 1)
+        database.conversationDao().insertConversations(listOf(originalConversation))
+        val modePrefs = context.getSharedPreferences("eta_conversation_modes", Context.MODE_PRIVATE)
+        val outsideModes = ConversationModePreference.captureSnapshot(context)
+        modePrefs.edit().clear().putString("conversation_mode", ConversationModePreference.NORMAL)
+            .putString("__draft_mode", ConversationModePreference.FREEDOM).putBoolean("legacy-conversation", true)
+            .putString("future-value", "原值").putInt("future-int", 7).putLong("future-long", 9L)
+            .putFloat("future-float", 1.5f).putStringSet("future-set", setOf("保留", "全部")).commit()
+        val originalModes = ConversationModePreference.captureSnapshot(context)
         val previous = document("原模板正文")
         PromptTemplateRepository.restoreDocument(context, previous)
         AgentMemoryRepository.replaceAll("原现实记忆")
         val imported = EtaBackupDocument(exportedAt = 0, memoryMd = "新现实记忆", promptTemplates = document("新模板正文"),
+            conversations = listOf(originalConversation), conversationModes = mapOf("conversation" to ConversationModePreference.FREEDOM),
             roleplay = CharacterBackupData(characters = database.characterDao().characters(),
                 assets = listOf(CharacterBackupAsset(blocked.id, memoryMd = "写入失败"))),
         )
@@ -125,8 +136,11 @@ class PromptTemplateBackupTest {
             assertEquals(previous, PromptTemplateRepository.snapshot(context))
             assertEquals("原现实记忆", AgentMemoryRepository.snapshot().content)
             assertEquals("阻塞角色", CharacterRepository.get(blocked.id)?.card?.name)
+            assertEquals(originalModes, ConversationModePreference.captureSnapshot(context))
+            assertEquals(ConversationModePreference.NORMAL, ConversationModePreference.getMode(context, "conversation"))
         } finally {
             check(blocker.delete())
+            ConversationModePreference.restoreSnapshot(context, outsideModes)
         }
     }
 }
