@@ -318,12 +318,22 @@ private fun PromptBindingEditor(
         }
     }
     when (picker) {
-        "provider" -> PromptChoiceDialog("选择服务商", providers.map { PromptChoice(it.id, it.name) }, providerId, { picker = null }) {
-            providerId = it; modelId = null; picker = null
-        }
-        "model" -> PromptChoiceDialog("选择模型", listOf(PromptChoice(null, "全部模型")) + provider?.models.orEmpty().map {
-            PromptChoice(it.modelId, it.displayName, it.modelId)
-        }, modelId, { picker = null }) { modelId = it; picker = null }
+        "provider" -> PromptChoiceDialog(
+            title = "选择服务商",
+            choices = providers.map { PromptChoice(it.id, it.name) },
+            selectedId = providerId,
+            onDismiss = { picker = null },
+            onSelect = { selected -> providerId = selected; modelId = null; picker = null },
+        )
+        "model" -> PromptChoiceDialog(
+            title = "选择模型",
+            choices = listOf(PromptChoice(null, "全部模型")) + provider?.models.orEmpty().map {
+                PromptChoice(it.modelId, it.displayName, it.modelId)
+            },
+            selectedId = modelId,
+            onDismiss = { picker = null },
+            onSelect = { selected -> modelId = selected; picker = null },
+        )
         "template" -> PromptTemplateChoiceDialog("选择模板", templates, templateId, onDismiss = { picker = null },
             onSelect = { templateId = it; picker = null })
     }
