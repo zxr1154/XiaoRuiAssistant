@@ -2,6 +2,7 @@ package io.github.mangi.eta.data.repository
 
 import io.github.mangi.eta.data.db.ConversationStateEntity
 import io.github.mangi.eta.data.model.ProviderAuthModes
+import io.github.mangi.eta.agent.roleplay.ConversationModePreference
 
 /** 校验只保留标识与角色关联所需的消息类型，正文和检查点逐条读取后释放。 */
 internal object EtaBackupValidation {
@@ -21,6 +22,12 @@ internal object EtaBackupValidation {
             }
             if (header.conversationState != null && header.conversationState.selectedConversationId !in conversationIds) {
                 throw EtaBackupException("备份中的当前会话不存在")
+            }
+            header.conversationModes?.let { modes ->
+                if (modes.any { (id, mode) ->
+                    id !in conversationIds || id.length > 256 || id.any { it.isISOControl() } ||
+                        mode !in setOf(ConversationModePreference.NORMAL, ConversationModePreference.FREEDOM, ConversationModePreference.ROLEPLAY)
+                }) throw EtaBackupException("备份中的会话模式或所属会话无效")
             }
             val messageIds = mutableSetOf<String>()
             val messagePositions = mutableSetOf<Pair<String, Int>>()
@@ -90,5 +97,10 @@ internal object EtaBackupValidation {
             throw EtaBackupException("备份中的会话状态无效")
         }
         if (document.memoryMd.toByteArray(Charsets.UTF_8).size > 1024 * 1024) throw EtaBackupException("MEMORY.md 超过 1 MiB 限制")
+        document.promptTemplates?.let {
+            try { PromptTemplateRepository.validate(it) } catch (failure: IllegalArgumentException) {
+                throw EtaBackupException("备份中的提示模板无效", failure)
+            }
+        }
     }
 }

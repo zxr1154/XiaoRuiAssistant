@@ -47,6 +47,7 @@ import io.github.mangi.eta.data.model.enabledModel
 import io.github.mangi.eta.data.repository.EtaBackupRepository
 import io.github.mangi.eta.data.repository.EtaBackupSummary
 import io.github.mangi.eta.data.repository.ProviderRepository
+import io.github.mangi.eta.data.repository.PromptTemplateRepository
 import io.github.mangi.eta.data.repository.RuntimeConfigRepository
 import io.github.mangi.eta.ui.model.isRoleplayConversation
 import io.github.mangi.eta.ui.model.AgentChatHomeUiState
@@ -1224,6 +1225,7 @@ internal class AgentAppState(
 
         val conversationId = selectedConversationId ?: newConversationId().also {
             ConversationModePreference.initializeConversation(appContext, it)
+            PromptTemplateRepository.initializeConversation(appContext, it)
             selectedConversationId = it
         }
         dispatchMessageToConversation(
@@ -1242,6 +1244,7 @@ internal class AgentAppState(
     ) {
         val targetConversationId = conversationId ?: selectedConversationId ?: newConversationId().also {
             ConversationModePreference.initializeConversation(appContext, it)
+            PromptTemplateRepository.initializeConversation(appContext, it)
             selectedConversationId = it
         }
         val state = conversationsById[targetConversationId] ?: homeState

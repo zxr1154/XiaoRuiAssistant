@@ -45,6 +45,10 @@ internal object AgentPromptBuilder {
         if (roleplayContext == null && config.systemPrompt.isNotBlank()) {
             messages.put(systemMessage(config.systemPrompt))
         }
+        // The runtime resolves this once per run. Rebuilding a prefix never reads mutable settings.
+        if (config.promptTemplateText.isNotBlank()) {
+            messages.put(systemMessage(config.promptTemplateText))
+        }
         messages.put(
             systemMessage(
                 (if (roleplayContext == null) {
