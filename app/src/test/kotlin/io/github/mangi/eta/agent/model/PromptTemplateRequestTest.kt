@@ -22,19 +22,27 @@ import org.junit.Test
 
 class PromptTemplateRequestTest {
     @Test
-    fun openAiChatAndResponsesKeepProviderAndTemplateAsIndependentSystemContent() {
+    fun openAiProjectionsPreserveProviderAndTemplateExactlyOnce() {
         val config = config()
         val messages = messages(config)
         val systems = systems(messages)
         assertEquals("PROVIDER_PROMPT", systems[0])
         assertEquals(TEMPLATE, systems[1])
+        val original = messages.toString()
+        val expectedInstructions = systems.joinToString("\n\n")
         val chat = OpenAiChatCompletionsProvider.buildRequestJson(config, messages, JSONArray())
-        assertEquals(1, systems(chat.getJSONArray("messages")).count { it == TEMPLATE })
+        // Chat merges the independent internal system sections into one protocol message.
+        val chatMessages = chat.getJSONArray("messages")
+        assertEquals(listOf(expectedInstructions), systems(chatMessages))
+        assertEquals(1, Regex(Regex.escape(TEMPLATE)).findAll(systems(chatMessages).single()).count())
+        assertFalse((0 until chatMessages.length()).map(chatMessages::getJSONObject)
+            .filter { it.optString("role") != "system" }.any { it.toString().contains(TEMPLATE) })
         val responses = OpenAiResponsesProvider.buildRequestJson(config, messages, JSONArray())
         val instructions = responses.getString("instructions")
-        assertTrue(instructions.contains("PROVIDER_PROMPT"))
+        assertEquals(expectedInstructions, instructions)
         assertEquals(1, Regex(Regex.escape(TEMPLATE)).findAll(instructions).count())
         assertFalse(responses.getJSONArray("input").toString().contains(TEMPLATE))
+        assertEquals(original, messages.toString())
     }
 
     @Test
