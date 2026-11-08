@@ -61,6 +61,8 @@ internal fun RoleplayChatScreen(
             enabled = state.isConversationLoaded && !state.isStreaming && !state.isCompacting,
             onManage = onManageTemplates,
             roleplay = true,
+            providerId = modelPickerState.selectedModel?.providerId,
+            modelId = modelPickerState.selectedModel?.modelId?.trim(),
         )
         CompositionLocalProvider(LocalRoleplayChat provides state.roleplayChatUi()) {
             ConversationChatContent(

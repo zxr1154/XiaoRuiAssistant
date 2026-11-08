@@ -20,6 +20,7 @@ internal fun ConversationModeBar(
     enabled: Boolean,
     onModeSelected: (String) -> Unit,
     modifier: Modifier = Modifier,
+    disabledReason: String? = null,
 ) {
     Column(modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp).testTag("conversation-mode-bar")) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -29,9 +30,18 @@ internal fun ConversationModeBar(
                 modifier = Modifier.weight(1f).padding(vertical = 8.dp),
             )
             listOf(ConversationModePreference.NORMAL to "普通", ConversationModePreference.FREEDOM to "破甲").forEach { (mode, title) ->
-                EtaChoiceChip(title, selectedMode == mode, { onModeSelected(mode) },
+                EtaChoiceChip(if (selectedMode == mode) "✓ $title" else title, selectedMode == mode, { onModeSelected(mode) },
                     modifier = Modifier.testTag("conversation-mode-$mode"), enabled = enabled)
             }
+        }
+        if (!enabled || selectedMode == ConversationModePreference.FREEDOM) {
+            Text(
+                text = if (!enabled) disabledReason ?: "当前暂不可切换，完成当前操作后重试。"
+                    else "当前选择：破甲；模板只用于后续请求。",
+                style = MiuixTheme.textStyles.footnote1,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                modifier = Modifier.padding(top = 2.dp).testTag("conversation-mode-status"),
+            )
         }
     }
 }

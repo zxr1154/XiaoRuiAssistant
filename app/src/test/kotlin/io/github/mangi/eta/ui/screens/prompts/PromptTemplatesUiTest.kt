@@ -12,9 +12,13 @@ import androidx.activity.result.contract.ActivityResultContract
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -29,6 +33,7 @@ import androidx.core.app.ActivityOptionsCompat
 import io.github.mangi.eta.data.db.EtaDatabase
 import io.github.mangi.eta.data.model.PromptTemplate
 import io.github.mangi.eta.data.model.PromptTemplateDocument
+import io.github.mangi.eta.data.model.PromptTemplateSelection
 import io.github.mangi.eta.data.repository.PromptTemplateRepository
 import io.github.mangi.eta.data.repository.ProviderRepository
 import io.github.mangi.eta.ui.components.EtaPreference
@@ -109,6 +114,87 @@ class PromptTemplatesUiTest {
         assertTrue(PromptTemplateRepository.conversationSelection(context, "story-1").disabled)
     }
 
+    @Test fun automaticPreviewUpdatesWhenDefaultAndActualModelBindingsChange() {
+        val technical = PromptTemplate("technical", "技术交流", "先说明可验证的结论。")
+        PromptTemplateRepository.saveTemplate(context, technical)
+        PromptTemplateRepository.setDefault(context, template.id)
+        showPreview()
+        ui.onNodeWithText("提示模板：自动 · 故事写作").assertExists()
+        ui.onNodeWithTag("prompt-template-status").assertTextContains("默认模板", substring = true)
+
+        ui.runOnIdle { PromptTemplateRepository.setDefault(context, technical.id) }
+        ui.onNodeWithText("提示模板：自动 · 技术交流").assertExists()
+        ui.runOnIdle { PromptTemplateRepository.setBinding(context, "provider-main", "ds-v4pro", template.id) }
+        ui.onNodeWithText("提示模板：自动 · 故事写作").assertExists()
+        ui.onNodeWithTag("prompt-template-status").assertTextContains("模型绑定 · ds-v4pro", substring = true)
+        screenshot("automatic-model-binding-state")
+
+        ui.runOnIdle {
+            PromptTemplateRepository.setBinding(context, "provider-main", "ds-v4pro", null)
+            PromptTemplateRepository.setBinding(context, "provider-main", null, technical.id)
+        }
+        ui.onNodeWithText("提示模板：自动 · 技术交流").assertExists()
+        ui.onNodeWithTag("prompt-template-status").assertTextContains("服务商绑定", substring = true)
+    }
+
+    @Test fun previewExplainsDisabledTemplateConversationOffAndMissingDefault() {
+        PromptTemplateRepository.setDefault(context, template.id)
+        showPreview()
+        ui.runOnIdle { PromptTemplateRepository.saveTemplate(context, template.copy(enabled = false)) }
+        ui.onNodeWithText("提示模板：自动 · 故事写作（已停用）").assertExists()
+        ui.onNodeWithTag("prompt-template-status").assertTextContains("默认模板所选模板已停用", substring = true)
+        screenshot("disabled-template-state")
+
+        ui.runOnIdle { PromptTemplateRepository.setConversationSelection(context, "preview", PromptTemplateSelection(disabled = true)) }
+        ui.onNodeWithText("提示模板：不使用").assertExists()
+        ui.onNodeWithTag("prompt-template-status").assertTextContains("本会话已选择“不使用”", substring = true)
+        ui.runOnIdle {
+            PromptTemplateRepository.setConversationSelection(context, "preview", PromptTemplateSelection())
+            PromptTemplateRepository.setDefault(context, null)
+        }
+        ui.onNodeWithTag("prompt-template-status").assertTextContains("没有匹配的绑定或默认模板", substring = true)
+    }
+
+    @Test fun draftPreviewRequiresAModelAndKeepsItsExplicitChoiceAfterFirstMessage() {
+        PromptTemplateRepository.setConversationSelection(context, null, PromptTemplateSelection(template.id))
+        var conversationId by mutableStateOf<String?>(null)
+        var providerId by mutableStateOf<String?>(null)
+        var modelId by mutableStateOf<String?>(null)
+        ui.setContent {
+            MiuixTheme {
+                Column(Modifier.fillMaxSize()) {
+                    PromptTemplateBar(conversationId, enabled = true, onManage = {}, providerId = providerId, modelId = modelId)
+                }
+            }
+        }
+        ui.onNodeWithTag("prompt-template-status").assertTextContains("先选择模型", substring = true)
+        ui.runOnIdle { providerId = "provider-main"; modelId = "ds-v4pro" }
+        ui.onNodeWithTag("prompt-template-status").assertTextContains("下次请求将使用“故事写作” · 会话选择", substring = true)
+        ui.runOnIdle {
+            PromptTemplateRepository.initializeConversation(context, "first-message")
+            conversationId = "first-message"
+        }
+        ui.onNodeWithTag("prompt-template-status").assertTextContains("下次请求将使用“故事写作” · 会话选择", substring = true)
+        assertEquals(PromptTemplateSelection(template.id), PromptTemplateRepository.conversationSelection(context, "first-message"))
+    }
+
+    @Test fun roleplayPreviewShowsItsDefaultAndThenAnExplicitTemplateChoice() {
+        PromptTemplateRepository.setDefault(context, template.id)
+        ui.setContent {
+            MiuixTheme {
+                Column(Modifier.fillMaxSize()) {
+                    PromptTemplateBar("preview", enabled = true, onManage = {}, roleplay = true,
+                        providerId = "provider-main", modelId = "ds-v4pro")
+                }
+            }
+        }
+        ui.onNodeWithText("提示模板：不使用（角色默认）").assertExists()
+        ui.onNodeWithTag("prompt-template-status").assertTextContains("角色默认不添加助手模板", substring = true)
+        ui.runOnIdle { PromptTemplateRepository.setConversationSelection(context, "preview", PromptTemplateSelection(template.id)) }
+        ui.onNodeWithText("提示模板：故事写作").assertExists()
+        ui.onNodeWithTag("prompt-template-status").assertTextContains("下次请求将使用“故事写作” · 会话选择", substring = true)
+    }
+
     @Test fun invalidSafImportShowsAnErrorWithoutChangingSavedRules() {
         val source = File(context.cacheDir, "invalid-prompt-rules.json").apply { writeText("{\"schemaVersion\":999,\"templates\":[]}") }
         val original = PromptTemplateRepository.snapshot(context)
@@ -151,6 +237,16 @@ class PromptTemplatesUiTest {
         override val activityResultRegistry = object : ActivityResultRegistry() {
             override fun <I, O> onLaunch(requestCode: Int, contract: ActivityResultContract<I, O>, input: I, options: ActivityOptionsCompat?) {
                 dispatchResult(requestCode, Activity.RESULT_OK, Intent().setData(uri))
+            }
+        }
+    }
+
+    private fun showPreview() {
+        ui.setContent {
+            MiuixTheme {
+                Column(Modifier.fillMaxSize()) {
+                    PromptTemplateBar("preview", enabled = true, onManage = {}, providerId = "provider-main", modelId = "ds-v4pro")
+                }
             }
         }
     }

@@ -47,6 +47,12 @@ internal fun AgentHomeScreen(
         ConversationModeBar(
             selectedMode = selectedMode,
             enabled = state.isConversationLoaded && !state.isStreaming && !state.isCompacting,
+            disabledReason = when {
+                isLoadingConversation || !state.isConversationLoaded -> "正在加载会话，加载完成后可切换对话风格。"
+                state.isCompacting -> "正在压缩上下文，结束后可切换对话风格。"
+                state.isStreaming -> "正在生成回复，结束后可切换对话风格。"
+                else -> null
+            },
             onModeSelected = { mode ->
                 selectedMode = mode
                 ConversationModePreference.setMode(context, conversationKey, mode)
@@ -57,6 +63,8 @@ internal fun AgentHomeScreen(
                 conversationId = conversationKey,
                 enabled = state.isConversationLoaded && !state.isStreaming && !state.isCompacting,
                 onManage = onManageTemplates,
+                providerId = modelPickerState.selectedModel?.providerId,
+                modelId = modelPickerState.selectedModel?.modelId?.trim(),
             )
         }
         CompositionLocalProvider(LocalRoleplayChat provides null) {
