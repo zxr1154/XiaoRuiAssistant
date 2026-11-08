@@ -1,4 +1,6 @@
-# Eta
+# 小瑞助手（基于 Eta）
+
+小瑞助手 3.5.0 新增原生提示模板：在设置中管理模板、默认项和模型绑定，在破甲或角色会话中独立选择。详见[提示模板使用说明](docs/PROMPT_TEMPLATES.md)。本仓库的 APK 及版本请使用[小瑞助手 Releases](https://github.com/zxr1154/XiaoRuiAssistant/releases)，下文保留上游 Eta 的功能介绍与来源。
 
 **简体中文** | [English](README_EN.md)
 

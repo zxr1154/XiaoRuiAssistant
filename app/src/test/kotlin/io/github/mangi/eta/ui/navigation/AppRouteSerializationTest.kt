@@ -31,6 +31,7 @@ class AppRouteSerializationTest {
             AppRoute.SpeechSynthesis,
             AppRoute.SpeechOss,
             AppRoute.DataBackup,
+            AppRoute.PromptTemplates,
             AppRoute.Memory,
             AppRoute.LinuxEnvironment,
             AppRoute.SharedFolders,

@@ -90,5 +90,10 @@ internal object EtaBackupValidation {
             throw EtaBackupException("备份中的会话状态无效")
         }
         if (document.memoryMd.toByteArray(Charsets.UTF_8).size > 1024 * 1024) throw EtaBackupException("MEMORY.md 超过 1 MiB 限制")
+        document.promptTemplates?.let {
+            try { PromptTemplateRepository.validate(it) } catch (failure: IllegalArgumentException) {
+                throw EtaBackupException("备份中的提示模板无效", failure)
+            }
+        }
     }
 }

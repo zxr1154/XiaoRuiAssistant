@@ -647,6 +647,14 @@ private fun SettingsPageContent(
 
                     EtaPreferenceDivider()
                     EtaArrowPreference(
+                        title = "提示模板",
+                        summary = "自定义提示词、会话选择与模型绑定",
+                        startAction = { EtaPreferenceIcon(icon = Icons.Rounded.Description, tint = EtaPreferenceColors.Blue) },
+                        onClick = { onNavigate(AppRoute.PromptTemplates) },
+                    )
+
+                    EtaPreferenceDivider()
+                    EtaArrowPreference(
                         title = stringResource(R.string.data_backup_title),
                         startAction = {
                             EtaPreferenceIcon(
