@@ -28,7 +28,7 @@ gh secret set ETA_RELEASE_KEY_PASSWORD
 ## PR 检查
 
 指向 `main` 的 Pull Request 会触发 `PR Check`，依次执行 Lint、单元测试和 Debug 构建，
-失败时上传检查报告。该工作流不读取任何 Secrets，来自 fork 的 PR 需要维护者在 PR 页面
+每次上传检查报告，通过检查后同时上传可安装的 Debug APK。该工作流不读取任何 Secrets，来自 fork 的 PR 需要维护者在 PR 页面
 批准后才会运行，批准前请重点检查 `.github/` 下的改动。
 
 `main` 分支通过仓库规则集要求 `Lint / Test / Debug Build` 检查通过后才能合并。

@@ -10,6 +10,9 @@ internal object ConversationModePreference {
     const val ROLEPLAY = "roleplay"
     private const val DRAFT_MODE = "__draft_mode"
 
+    internal data class Snapshot(val values: Map<String, Any?>)
+
+    @Synchronized
     fun getMode(context: Context, conversationId: String?, hasCharacter: Boolean = false): String {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val stored = prefs.getString(modeKey(conversationId), null)
@@ -21,6 +24,7 @@ internal object ConversationModePreference {
         return if (hasCharacter) ROLEPLAY else NORMAL
     }
 
+    @Synchronized
     fun setMode(context: Context, conversationId: String?, mode: String) {
         require(mode in listOf(NORMAL, FREEDOM, ROLEPLAY))
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -28,6 +32,7 @@ internal object ConversationModePreference {
     }
 
     /** Copy the visible draft selection before dispatching the first message. */
+    @Synchronized
     fun initializeConversation(context: Context, conversationId: String, hasCharacter: Boolean = false) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (prefs.contains(modeKey(conversationId)) || prefs.contains(conversationId)) return
@@ -35,6 +40,64 @@ internal object ConversationModePreference {
             if (it == ROLEPLAY) NORMAL else it
         }
         setMode(context, conversationId, mode)
+    }
+
+    /** Only actual conversations travel in backups; absent entries retain the normal/character default. */
+    @Synchronized
+    fun exportModes(context: Context, conversationIds: Set<String>): Map<String, String> {
+        val values = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).all
+        return buildMap {
+            conversationIds.forEach { id ->
+                val stored = values[modeKey(id)] as? String
+                if (stored in setOf(NORMAL, FREEDOM, ROLEPLAY)) put(id, stored!!)
+                else (values[id] as? Boolean)?.let { put(id, if (it) ROLEPLAY else NORMAL) }
+            }
+        }
+    }
+
+    /** Validate before opening an editor so a malformed backup cannot change existing preferences. */
+    @Synchronized
+    fun restoreModes(context: Context, modes: Map<String, String>) {
+        require(modes.all { (id, mode) ->
+            id.isNotBlank() && id.length <= 256 && id.none { it.isISOControl() } && mode in setOf(NORMAL, FREEDOM, ROLEPLAY)
+        }) { "备份中的会话模式无效" }
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val editor = prefs.edit()
+        // Clear previous conversation choices, including the old boolean representation, while keeping the local draft.
+        prefs.all.forEach { (key, value) ->
+            if (key != DRAFT_MODE && (key.endsWith("_mode") || value is Boolean)) editor.remove(key)
+        }
+        modes.forEach { (id, mode) -> editor.putString(modeKey(id), mode) }
+        check(editor.commit()) { "会话模式恢复失败" }
+    }
+
+    /** Rollback preserves every original typed preference, including legacy and currently unknown entries. */
+    @Synchronized
+    fun captureSnapshot(context: Context): Snapshot = Snapshot(
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).all.mapValues { (_, value) ->
+            if (value is Set<*>) value.toSet() else value
+        },
+    )
+
+    @Synchronized
+    fun restoreSnapshot(context: Context, snapshot: Snapshot) {
+        val editor = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear()
+        snapshot.values.forEach { (key, value) ->
+            when (value) {
+                is String -> editor.putString(key, value)
+                is Boolean -> editor.putBoolean(key, value)
+                is Int -> editor.putInt(key, value)
+                is Long -> editor.putLong(key, value)
+                is Float -> editor.putFloat(key, value)
+                is Set<*> -> {
+                    require(value.all { it is String }) { "原会话设置类型无效" }
+                    editor.putStringSet(key, value.filterIsInstance<String>().toSet())
+                }
+                null -> editor.remove(key)
+                else -> error("原会话设置类型无效")
+            }
+        }
+        check(editor.commit()) { "原会话模式回滚失败" }
     }
 
     private fun modeKey(conversationId: String?): String =

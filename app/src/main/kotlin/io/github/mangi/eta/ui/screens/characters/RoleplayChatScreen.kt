@@ -22,6 +22,7 @@ import io.github.mangi.eta.ui.components.LocalRoleplayChat
 import io.github.mangi.eta.ui.model.AppModule
 import io.github.mangi.eta.ui.model.roleplayChatUi
 import io.github.mangi.eta.ui.screens.home.ConversationChatContent
+import io.github.mangi.eta.ui.screens.prompts.PromptTemplateBar
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -39,6 +40,7 @@ internal fun RoleplayChatScreen(
     historyLoadState: ConversationHistoryLoadState = ConversationHistoryLoadState.Idle,
     isDrawerOpen: Boolean = false,
     modifier: Modifier = Modifier,
+    onManageTemplates: () -> Unit = {},
 ) {
     Column(modifier.fillMaxSize().testTag("roleplay-chat")) {
         HomeModuleTabs(AppModule.Roleplay, onAssistant, onRoleplay = { onAction(AgentHomeAction.OpenCharacters) })
@@ -54,6 +56,14 @@ internal fun RoleplayChatScreen(
             )
             TextButton("角色库", onClick = { onAction(AgentHomeAction.OpenCharacters) })
         }
+        PromptTemplateBar(
+            conversationId = conversationKey,
+            enabled = state.isConversationLoaded && !state.isStreaming && !state.isCompacting,
+            onManage = onManageTemplates,
+            roleplay = true,
+            providerId = modelPickerState.selectedModel?.providerId,
+            modelId = modelPickerState.selectedModel?.modelId?.trim(),
+        )
         CompositionLocalProvider(LocalRoleplayChat provides state.roleplayChatUi()) {
             ConversationChatContent(
                 state = state,

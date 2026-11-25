@@ -16,6 +16,7 @@ import io.github.mangi.eta.agent.memory.ConversationMemoryPins
 import io.github.mangi.eta.agent.roleplay.CharacterMemoryTools
 import io.github.mangi.eta.agent.roleplay.ConversationModePreference
 import io.github.mangi.eta.agent.roleplay.RoleplayRunContext
+import io.github.mangi.eta.agent.prompt.PromptTemplateResolver
 import io.github.mangi.eta.agent.mcp.McpRunSnapshot
 import io.github.mangi.eta.agent.mcp.McpToolExecutor
 import io.github.mangi.eta.agent.mcp.RoutingToolExecutor
@@ -33,6 +34,7 @@ import io.github.mangi.eta.agent.voice.EtaAssistantOverlayService
 import io.github.mangi.eta.core.AndroidAgentLogger
 import io.github.mangi.eta.core.safeLogType
 import io.github.mangi.eta.data.repository.AgentMemoryRepository
+import io.github.mangi.eta.data.repository.PromptTemplateRepository
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
@@ -115,6 +117,18 @@ internal class AgentRuntimeRunExecutor(
                 }
                 ConversationModePreference.getMode(appContext, id, hasCharacter)
             } ?: ConversationModePreference.NORMAL
+            val templateSnapshot = PromptTemplateRepository.snapshot(appContext)
+            val promptTemplate = PromptTemplateResolver.resolve(
+                document = templateSnapshot,
+                mode = conversationMode,
+                providerId = request.config.providerId,
+                modelId = request.config.model,
+                conversationId = conversationId,
+            )
+            val runConfig = request.config.copy(
+                promptTemplateText = promptTemplate.text,
+                promptTemplateId = promptTemplate.templateId,
+            )
             val roleplayContext = conversationId?.takeIf {
                 conversationMode == ConversationModePreference.ROLEPLAY
             }?.let { id ->
@@ -266,9 +280,7 @@ internal class AgentRuntimeRunExecutor(
                 }
             }
             val completedResponse = AgentModelClient.complete(
-                config = if (conversationMode == ConversationModePreference.FREEDOM
-                ) request.config.copy(systemPrompt = ConversationModePreference.FREEDOM_PROMPT)
-                else request.config,
+                config = runConfig,
                 sessionId = request.effectiveModelSessionId,
                 operationId = request.runId,
                 initialUserMessageId = uiPayload?.promptMessageId(request.runId) ?: "user-${request.runId}",

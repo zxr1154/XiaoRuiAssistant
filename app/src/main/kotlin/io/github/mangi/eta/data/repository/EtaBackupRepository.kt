@@ -12,6 +12,8 @@ import io.github.mangi.eta.data.db.ProviderModelEntity
 import io.github.mangi.eta.data.db.ProviderWithModelsSeed
 import io.github.mangi.eta.data.datastore.SettingsDataStore
 import io.github.mangi.eta.data.model.ProviderAuthModes
+import io.github.mangi.eta.data.model.PromptTemplateDocument
+import io.github.mangi.eta.agent.roleplay.ConversationModePreference
 import io.github.mangi.eta.core.AndroidAgentLogger
 import io.github.mangi.eta.core.safeLogType
 import io.github.mangi.eta.core.safeStackTrace
@@ -23,6 +25,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.nullable
 import kotlinx.serialization.builtins.serializer
 import java.io.InputStream
@@ -44,6 +47,8 @@ internal data class EtaBackupDocument(
     val conversationState: ConversationStateEntity? = null,
     val memoryMd: String = "",
     val roleplay: CharacterBackupData? = null,
+    val promptTemplates: PromptTemplateDocument? = null,
+    val conversationModes: Map<String, String>? = null,
 ) {
     companion object {
         const val FORMAT = "eta-backup"
@@ -97,13 +102,16 @@ internal object EtaBackupRepository {
                     writer.value("selectedModelId", String.serializer().nullable, settings.selectedModelId)
                     writer.value("conversationState", ConversationStateEntity.serializer().nullable, dao.state())
                     writer.value("memoryMd", String.serializer(), memory)
+                    writer.value("promptTemplates", PromptTemplateDocument.serializer().nullable, PromptTemplateRepository.snapshot(appContext))
                     val boundAvatars = linkedMapOf<String, String?>()
+                    val conversationIds = mutableSetOf<String>()
                     var conversationCount = 0
                     var messageCount = 0
                     phase = "export_conversations"
                     writer.beginArray(EtaBackupJsonStreams.CONVERSATIONS)
                     exportRows({ dao.conversationEntityRowsPage(EXPORT_PAGE_SIZE, it) }) { raw ->
                         val row = dao.restoreConversation(raw)
+                        conversationIds += row.id
                         writer.record(ConversationEntity.serializer(), row)
                         CharacterBackupTransfer.avatarReference(row)?.let { (id, avatar) ->
                             if (id !in boundAvatars) boundAvatars[id] = avatar
@@ -111,6 +119,8 @@ internal object EtaBackupRepository {
                         conversationCount++
                     }
                     writer.endArray()
+                    writer.value("conversationModes", MapSerializer(String.serializer(), String.serializer()).nullable,
+                        ConversationModePreference.exportModes(appContext, conversationIds))
                     phase = "export_messages"
                     writer.beginArray(EtaBackupJsonStreams.MESSAGES)
                     exportRows({ dao.allMessageRowsPage(EXPORT_PAGE_SIZE, it) }) { raw ->
@@ -152,6 +162,8 @@ internal object EtaBackupRepository {
                 val document = staged.header
                 val database = EtaDatabase.get(appContext)
                 val previousMemory = AgentMemoryRepository.snapshot().content
+                val previousPromptTemplates = document.promptTemplates?.let { PromptTemplateRepository.snapshot(appContext) }
+                val previousConversationModes = document.conversationModes?.let { ConversationModePreference.captureSnapshot(appContext) }
                 val previousRoleMemories = document.roleplay?.assets.orEmpty().associate {
                     it.characterId to CharacterMemoryRepository.snapshot(appContext, it.characterId).content
                 }
@@ -164,6 +176,8 @@ internal object EtaBackupRepository {
                 // 显式检查原任务取消，使 Room 提交到凭据清理之间不留下被取消打断的空隙。
                 withContext(NonCancellable) {
                     var memoryWriteStarted = false
+                    var promptWriteStarted = false
+                    var modeWriteStarted = false
                     try {
                         database.withTransaction {
                             cancellation.ensureActive()
@@ -200,6 +214,18 @@ internal object EtaBackupRepository {
                                     roleplay.characters.map { it.copy(avatarPath = avatarPaths[it.id]) }, roleplay.persona,
                                 )
                             }
+                            phase = "restore_prompt_templates"
+                            document.promptTemplates?.let {
+                                cancellation.ensureActive()
+                                promptWriteStarted = true
+                                PromptTemplateRepository.restoreDocument(appContext, it)
+                            }
+                            phase = "restore_conversation_modes"
+                            document.conversationModes?.let {
+                                cancellation.ensureActive()
+                                modeWriteStarted = true
+                                ConversationModePreference.restoreModes(appContext, it)
+                            }
                             phase = "restore_memory"
                             cancellation.ensureActive()
                             memoryWriteStarted = true
@@ -216,6 +242,16 @@ internal object EtaBackupRepository {
                                 try { CharacterMemoryRepository.replaceAll(appContext, id, content) } catch (restoreFailure: Throwable) {
                                     failure.addSuppressed(restoreFailure)
                                 }
+                            }
+                        }
+                        if (promptWriteStarted) previousPromptTemplates?.let {
+                            try { PromptTemplateRepository.restoreDocument(appContext, it) } catch (restoreFailure: Throwable) {
+                                failure.addSuppressed(restoreFailure)
+                            }
+                        }
+                        if (modeWriteStarted) previousConversationModes?.let {
+                            try { ConversationModePreference.restoreSnapshot(appContext, it) } catch (restoreFailure: Throwable) {
+                                failure.addSuppressed(restoreFailure)
                             }
                         }
                         CharacterBackupTransfer.discardAssets(avatarPaths, failure)

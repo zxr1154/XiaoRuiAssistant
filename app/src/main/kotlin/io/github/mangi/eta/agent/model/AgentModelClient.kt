@@ -19,6 +19,7 @@ import io.github.mangi.eta.data.model.ReasoningEffort
 import io.github.mangi.eta.data.provider.BuiltinProviders
 import io.github.mangi.eta.data.provider.ProviderSourceRegistry
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import kotlinx.serialization.json.Json
 import io.github.mangi.eta.agent.terminal.TerminalExecutionContext
 import org.json.JSONArray
@@ -325,6 +326,9 @@ internal object AgentModelClient {
         val customBody: List<CustomBody> = emptyList(),
         val autoCompactionEnabled: Boolean = Prefs.Keys.BOOLEAN_DEFAULTS.getValue(Prefs.Keys.AGENT_AUTO_COMPACTION_ENABLED),
         val authMode: String = ProviderAuthModes.API_KEY,
+        /** Frozen by the runtime after the request crosses the process boundary; never persisted in config or backups. */
+        @Transient val promptTemplateText: String = "",
+        @Transient val promptTemplateId: String? = null,
     ) {
         val usesHostedWebSearch: Boolean
             get() = hostedWebSearchEnabled && providerType == ProviderTypes.OPENAI_COMPATIBLE &&
